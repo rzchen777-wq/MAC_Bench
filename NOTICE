@@ -1,0 +1,14 @@
+MAC-Bench original code and task specifications: MIT (see LICENSE).
+
+Optional baseline integrations use AOrchestra, Meta-Team, and Magentic-One/AutoGen.
+Their repository URLs and commits are recorded in configs/baselines/upstream.json.
+Their source checkouts retain the upstream license files.
+
+Task application and software project assets retain the license notices packaged
+with those assets.
+
+Business applications:
+- Twenty: https://github.com/twentyhq/twenty
+- Pretix: https://github.com/pretix/pretix
+- Frappe HRMS: https://github.com/frappe/hrms
+- BigCapital: https://github.com/bigcapitalhq/bigcapital

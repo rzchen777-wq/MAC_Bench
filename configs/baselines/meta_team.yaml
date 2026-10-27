@@ -1,0 +1,109 @@
+format: collaboration.method_spec.v1
+implementation_status: implemented
+method: meta_team
+protocol_ref: configs/evaluation/baseline_protocol.yaml
+source:
+  repository: https://github.com/zz-haooo/Meta-Team
+  revision: a4e37a68440b7c851a4db43b39b835ecdac23141
+  directory: .cache/baselines/Meta-Team
+adapter_entrypoint: mac_bench.baselines.meta_team.tasks:MetaTeam
+variant: two_domain_pools_frozen_test
+llm:
+  base_url: null
+  model_name: null
+  api_key: null
+  api_key_env: MAC_BENCH_LLM_API_KEY
+  timeout_seconds: 180
+  max_retries: 0
+  thinking: disabled
+model_bindings:
+  all_pool_members: experiment.model
+  helper_and_finalization_calls: experiment.model
+  dev_reflection_calls: experiment.model
+execution:
+  preserve:
+  - Runner
+  - Agent.run_loop
+  - MessageStore
+  - team_primitives
+  - reflection_framework
+  recruitment: activate_member_from_selected_predefined_pool
+  workspace: shared_episode_world
+  environment_tools_source: task.view.tools
+  host_shell_or_database_fallback: false
+teams:
+  engineering:
+    source_pool: agents/pool_SWE_Pro
+    categories:
+    - product_application
+    - platform_data
+    - developer_release
+    chairman: planner
+    members:
+    - name: planner
+      role: coordinate_engineering_delivery
+      max_steps: 200
+    - name: developer
+      role: implement_and_integrate
+      max_steps: 250
+    - name: reviewer
+      role: verify_behavior_and_regressions
+      max_steps: 60
+    environment_tools:
+    - terminal
+    constitution: upstream_constitution_environment_adapted
+    artifact: configs/baselines/teams/meta_team/engineering
+    adaptation: upstream_pool_environment_adapted_no_dev_evolution
+  operational:
+    source_pool: agents/pool_LOCAbench
+    categories:
+    - business_finance
+    - service_administration
+    - project_content_operations
+    chairman: chairman
+    members:
+    - name: chairman
+      role: coordinate_business_changes
+      max_steps: 500
+    - name: worker-a
+      role: general_business_worker
+      max_steps: 200
+    - name: worker-b
+      role: general_business_worker
+      max_steps: 200
+    - name: worker-c
+      role: general_business_worker
+      max_steps: 200
+    environment_tools:
+    - list_apps
+    - list_tools
+    - describe_tool
+    - call_tool
+    - read_result
+    constitution: upstream_constitution_environment_adapted
+    artifact: configs/baselines/teams/meta_team/operational
+    adaptation: upstream_pool_environment_adapted_no_dev_evolution
+learning:
+  frozen_artifact: null
+  dev_enable_reflection: true
+  test_enable_reflection: false
+  test_task_validator: disabled
+  test_team_state: fresh_copy_of_selected_frozen_domain_pool
+  freeze_artifacts_per_domain: true
+artifacts:
+  domain_pools: upstream_derived_and_hashed
+  dev_evolved_pools: not_generated
+model_parameters:
+  temperature: 0.2
+  recovery_attempts: 2
+  recovery_max_tokens: 65536
+  max_tokens: 32768
+seed: 0
+
+context_policy:
+  request_token_limit: 131072
+  target_input_tokens: 64000
+  summary_output_tokens: 12288
+  recent_turns: 5
+  recent_tokens: 20000
+  prune_old_reads: false

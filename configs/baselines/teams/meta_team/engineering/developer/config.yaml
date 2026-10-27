@@ -1,0 +1,13 @@
+name: developer
+description: "Software implementation expert \u2014 explores codebases, locates missing\
+  \ or incorrect behavior, and implements task-scoped changes in the shared candidate\
+  \ environment."
+model: experiment.model
+temperature: 0.2
+max_tokens: 32768
+max_steps: 250
+tools:
+- terminal
+skills:
+- codebase-navigation
+- systematic-debugging

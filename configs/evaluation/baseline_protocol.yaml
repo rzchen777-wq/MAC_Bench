@@ -1,0 +1,47 @@
+format: collaboration.baseline_protocol.v1
+implementation_status: implemented
+model:
+  source: experiment.model
+  homogeneous: true
+  gateway: episode.recorded_client
+  parameters_source: experiment.model_parameters
+  retries_source: recorded_gateway_no_hidden_retries
+  count_provider_attempts: true
+budget:
+  source: experiment.episode_budget
+  scope: all_method_workers_and_helpers
+  charge_environment_calls: true
+  record_internal_control_calls_separately: true
+world:
+  provider: modal
+  owner: evaluation.task_handle
+  workspace_scope: episode
+  shared_by_all_workers: true
+  reset_scope: between_episodes_only
+  submission: actual_final_candidate
+  private_grading: after_method_workers_stop
+  test_private_feedback: false
+learning:
+  adaptation_split: dev
+  freeze_before_test: true
+  test_cross_task_updates: false
+records:
+  retain_native_traces: true
+  model_call_tags:
+  - agent_id
+  - role
+  - phase
+  - logical_call_id
+  - provider_attempt_id
+  events:
+  - agent_start
+  - agent_end
+  - delegate
+  - message_send
+  - message_receive
+  - method_stop
+  provenance:
+  - source_revision
+  - adapter_revision
+  - resolved_config_hash
+  - frozen_artifact_hash

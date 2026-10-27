@@ -1,0 +1,71 @@
+format: collaboration.method_spec.v1
+implementation_status: implemented
+method: aorchestra
+protocol_ref: configs/evaluation/baseline_protocol.yaml
+source:
+  repository: https://github.com/FoundationAgents/AOrchestra
+  revision: 14a1a2051d6b03c479b706f8f555a60b8419e3b5
+  directory: .cache/baselines/AOrchestra
+adapter_entrypoint: mac_bench.baselines.aorchestra.tasks:AOrchestra
+variant: homogeneous_backbone_shared_world
+# Per-method connection. Null values use MAC_BENCH_LLM_*; ${VAR} references are supported.
+llm:
+  base_url: null
+  model_name: null
+  api_key: null
+  api_key_env: MAC_BENCH_LLM_API_KEY
+  timeout_seconds: 180
+  max_retries: 0
+  thinking: disabled
+model_bindings:
+  main_agent: experiment.model
+  sub_agents: experiment.model
+  trajectory_summarizer: experiment.model
+  memory_helpers: experiment.model
+  allow_model_selection_outside_experiment: false
+execution:
+  preserve:
+  - MainAgent
+  - DelegateTaskTool
+  - ReActAgent
+  - delegation_history
+  workspace: shared_episode_world
+  delegation_local_state:
+  - instruction
+  - observation
+  - step_counter
+  - done
+  - memory
+  delegate_reset_resets_world: false
+  worker_step_reporting: actual_history_length_and_environment_limit
+  worker_memory: delegation_aware_rolling_summary_10_records_keep_3
+  add_concurrent_delegation: false
+  control_tools:
+  - delegate_task
+  - submit
+  - finish
+  environment_tools_source: task.view.tools
+  engineering_branch: terminalbench
+  operational_branch: gaia_with_live_application_task_translation
+upstream_limits:
+  main_attempts: 10
+  sub_agent_steps: 50
+  policy: retain_as_initial_settings_and_tune_only_on_dev
+prompts:
+  engineering: upstream_terminalbench_with_shared_candidate_translation
+  operational: upstream_gaia_with_application_task_translation
+  preserve_action_protocol: true
+  action_validation: coordinator_and_worker_json_with_schema_and_bounded_retries
+artifacts:
+  domain_prompts: upstream_templates_with_explicit_environment_translations
+  resolved_model_bindings: recorded_per_run
+model_parameters:
+  temperature: 0.2
+  recovery_attempts: 2
+  recovery_max_tokens: 32768
+  max_tokens: 8192
+  recovery_instruction: >-
+    Return exactly one complete JSON action with action and params, then stop.
+    Do not simulate observations or emit a sequence of future actions.
+    Split large edits across later turns after receiving real tool results.
+seed: 0

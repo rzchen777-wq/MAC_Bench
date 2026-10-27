@@ -1,0 +1,13 @@
+name: chairman
+description: "Task coordinator \u2014 analyzes enterprise workflow task requirements,\
+  \ distributes subtasks to workers, verifies completeness, and signals task completion."
+model: experiment.model
+temperature: 0.2
+max_tokens: 32768
+max_steps: 500
+tools:
+- list_apps
+- list_tools
+- describe_tool
+- call_tool
+- read_result

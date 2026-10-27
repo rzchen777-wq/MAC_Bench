@@ -1,0 +1,27 @@
+{
+  "dependencies": [
+    {
+      "origin": "https://github.com/FoundationAgents/AOrchestra.git",
+      "revision": "14a1a2051d6b03c479b706f8f555a60b8419e3b5",
+      "licenses": [
+        "LICENSE"
+      ],
+      "name": "AOrchestra",
+      "path": ".cache/baselines/AOrchestra"
+    },
+    {
+      "origin": "https://github.com/microsoft/autogen.git",
+      "revision": "027ecf0a379bcc1d09956d46d12d44a3ad9cee14",
+      "licenses": [],
+      "name": "Magentic-One",
+      "path": ".cache/baselines/Magentic-One"
+    },
+    {
+      "origin": "https://github.com/zz-haooo/Meta-Team.git",
+      "revision": "a4e37a68440b7c851a4db43b39b835ecdac23141",
+      "licenses": [],
+      "name": "Meta-Team",
+      "path": ".cache/baselines/Meta-Team"
+    }
+  ]
+}

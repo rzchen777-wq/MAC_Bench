@@ -1,0 +1,37 @@
+{
+  "format": "mac_bench.tool_presentation.v1",
+  "version": 2,
+  "files": {
+    "tools/__init__.py": "19050018c5d4869474acc09a20189dfe1aac4459c5720b74a675c23e5c2bea51",
+    "tools/__main__.py": "647f04553dc149aa7277acff80bea57d1f5da39670412a2eb54b353db1b01ec6",
+    "tools/adapters/__init__.py": "806680c6ad1a1879bd4da5cfc7dbc810dbc385987329a7689b5c14a0e3c9a82b",
+    "tools/adapters/common.py": "ed2e423baaf31f31a1de3db8fef19c943f4c0c5a9aad9f2b6cb35b16c45570b2",
+    "tools/adapters/frappe.py": "22c1125977fe38dbaadcff12e2333013dd14421992fbf46d8a485e2e0a2f65f6",
+    "tools/adapters/rest.py": "fff87506a6c4322fdca61f19c805e33cbde8be19acef14cdc1a06964a2e518ea",
+    "tools/adapters/twenty.py": "f63e6f8fe1f71e7ad0e7587f90567bd7325c115bebdbfc310f24def88f5bdd46",
+    "tools/api.py": "6ed2e08f36d30fbe96c764df6ffe19aa30ebd31da9cf6451b324367b316b0645",
+    "tools/build.py": "1741d02aa545b266ed113c23ab730b0b39f33c8a3039ce6e10100314b5a81491",
+    "tools/config.py": "5028dfebc72ed395c493b6cacd7ea02c0e8d5ffe8eb35856c6e2448d19935a81",
+    "tools/contracts.py": "35c3454583abd14665c32d997a0bff86bd60bdd963db7aa712402be68b8c7351",
+    "tools/documentation.py": "849a8d815a135f4cacc08a1fc79d4b69d6c416ce791a7e930ada5c0c10b644ce",
+    "tools/error_feedback.py": "55d224c206a00d624c0ac80ddb53f2ff6246c1a59833fe4753af36571b053e7e",
+    "tools/examples.py": "32d6ab067a5ec559a602a590d4be576558c20e702f0962e8d6d658680dd87558",
+    "tools/journal.py": "b69c8013b407ffd1020644d368abd5783dfa60e465c9df63adbc82d8b5200340",
+    "tools/navigation.py": "58927ca2d18d39e14f4c7adfcf130782c8635bd2f810e64ed83a265a52cc9b20",
+    "tools/query.py": "c06e2ff372719ccd69acc86ae6b22aa9e79d3f7b315764314e8a1db2554abee9",
+    "tools/registry.py": "305d9452aeb37a874efe96380d37cf0d32b934c93bba98e105fc2f2b53d742bd",
+    "tools/service.py": "3f8ac414c6721e92c883f95d418b6363bb96ec4601712613eea4452b9f220b31",
+    "resources.py": "3d59fecb355b6f41c36b407c01b92cd9ad707b6679d27e475cde4af325185d46",
+    "guide.txt": "fd63cd2cc3503695ea5f7fe77b773f93c73b86a190657212bb45213916af4755"
+  },
+  "remote_files": [
+    "tools/query.py",
+    "tools/api.py",
+    "tools/service.py",
+    "tools/error_feedback.py",
+    "tools/documentation.py"
+  ],
+  "host_api": "tools/api.py",
+  "host_resources": "resources.py",
+  "guide": "guide.txt"
+}

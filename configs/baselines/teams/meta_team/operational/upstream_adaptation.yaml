@@ -1,0 +1,73 @@
+format: meta_team.upstream_adaptation.v1
+source_pool: .cache/baselines/Meta-Team/agents/pool_LOCAbench
+assets:
+- path: chairman/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/chairman/config.yaml
+  source_sha256: 6972cb36ee0579be6495dc0d8162aee873b3b5b0a3006b5818d35790c13db291
+  adapted_sha256: 42bb4d9f9673c094329c1bdedbd8ee98958a467c84466b166f4e4283b559aa71
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: worker-a/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-a/config.yaml
+  source_sha256: 9edded7a3e7fcbb20b7008c66abdb7aa088ae9a03594038d132cec3a1525f767
+  adapted_sha256: 7e8e6584de56baee1d9b630c1ffd83dc21aa038501126e2f6edf10f6d170cfe4
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: worker-b/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-b/config.yaml
+  source_sha256: 1d5e5db5b5131b6d21860482e0f576a225b274f9f64ee68fd8446d5cf4c01238
+  adapted_sha256: f11d0e4e58b654354ef6c38ae49850e09815659c8bb58effbb910c17d9fb0c4c
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: worker-c/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-c/config.yaml
+  source_sha256: e1212202027f531d93e984b228f763d718325f9480455e94c92e30353c86d02d
+  adapted_sha256: a558ba75dd7d282354aec55e31bcc1b2d056940789273228e7de3aa93132de4d
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: pool.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/pool.yaml
+  source_sha256: 86ae3d58f3753247fc714cbfa6b48672fbb4e4eee09fcb24cb43fa3dbabe824a
+  adapted_sha256: 86ae3d58f3753247fc714cbfa6b48672fbb4e4eee09fcb24cb43fa3dbabe824a
+  reason: Upstream pool settings unchanged. Shared episode wall-time limit is passed
+    to Runner.
+- path: chairman/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/chairman/prompt.md
+  source_sha256: d71620b679d3b09cbff85ef9d0b6f390dda3e65190fe4ee0ad84bf3b9cdc42de
+  adapted_sha256: 2751415e76591f5cd8cac33a713e35957e3accff409538d704c62011b77c97da
+  reason: Retain early recruitment, collection-first delegation, upstream bulk thresholds,
+    count verification and completion protocol. Replace LOCA-specific files/email/fallback
+    instructions with actual application API discovery and failure reporting; remove
+    incorrect scoring claim.
+- path: worker-a/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-a/prompt.md
+  source_sha256: 21e8e7fb4168cc111b8cc68f766988cb0eafbbec475f9409fc3789a283dbee0a
+  adapted_sha256: 461e21c3ab78360765f270866c269b5b7f7c405d84e7de9e985664aa6f09ba1d
+  reason: Original general worker role, pagination, assigned-range exclusivity and
+    reporting retained. Replace unavailable email/file/fallback instructions with
+    published application operations.
+- path: worker-b/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-b/prompt.md
+  source_sha256: 21e8e7fb4168cc111b8cc68f766988cb0eafbbec475f9409fc3789a283dbee0a
+  adapted_sha256: 461e21c3ab78360765f270866c269b5b7f7c405d84e7de9e985664aa6f09ba1d
+  reason: Original general worker role, pagination, assigned-range exclusivity and
+    reporting retained. Replace unavailable email/file/fallback instructions with
+    published application operations.
+- path: worker-c/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/worker-c/prompt.md
+  source_sha256: 21e8e7fb4168cc111b8cc68f766988cb0eafbbec475f9409fc3789a283dbee0a
+  adapted_sha256: 461e21c3ab78360765f270866c269b5b7f7c405d84e7de9e985664aa6f09ba1d
+  reason: Original general worker role, pagination, assigned-range exclusivity and
+    reporting retained. Replace unavailable email/file/fallback instructions with
+    published application operations.
+- path: constitution.md
+  source: .cache/baselines/Meta-Team/agents/pool_LOCAbench/constitution.md
+  source_sha256: 3c7ddeeb33f919a2197da1ede7a238b93ee5d41050c5bfcb010ec33e9b222183
+  adapted_sha256: 5d60afd27b96d90e3d6277fd43b702ba01c19165211a0d1497a9a70199fa72d5
+  reason: Retain completeness, precision, count-first bulk processing, coordination
+    and pagination. Replace unavailable fallback/files/tool names and incorrect scoring
+    claims with actual API contract.

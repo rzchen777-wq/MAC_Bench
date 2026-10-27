@@ -1,0 +1,87 @@
+format: meta_team.upstream_adaptation.v1
+source_pool: .cache/baselines/Meta-Team/agents/pool_SWE_Pro
+assets:
+- path: developer/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/developer/config.yaml
+  source_sha256: 0c069f77be1f05304b983271651df6926db0c452174226b172107df61dcde309
+  adapted_sha256: 4402275f636e07ea39360c9e8cd055414f4096e06b32c75143fcdd0d4e33bb4b
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: planner/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/planner/config.yaml
+  source_sha256: 8b936fed8a760c824c170e5992402cf967862f668af049c5fc6a1df7c423c347
+  adapted_sha256: 832db73961ec1833ec0ff25de1357f58a0c81be643f45ac0ef479b8b9c8ccec3
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: reviewer/config.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/reviewer/config.yaml
+  source_sha256: 7436449071b8e2c4a852537c6af2c0361df77a6229295c8b36723a69d9a56ee2
+  adapted_sha256: fb7501a9f9954678f5a05fa0d5958c373377a8320aff3ebe05129ed0fa481858
+  reason: Selected backbone and published environment tools; upstream roles, step
+    limits, temperature, output limits and skills retained. Description uses the target
+    task domain.
+- path: pool.yaml
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/pool.yaml
+  source_sha256: cc2170a726a8d723ea79916fb922fad04756cfd0134c0d7d6a93014dbc33a93e
+  adapted_sha256: cc2170a726a8d723ea79916fb922fad04756cfd0134c0d7d6a93014dbc33a93e
+  reason: Upstream pool settings unchanged. Shared episode wall-time limit is passed
+    to Runner.
+- path: developer/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/developer/prompt.md
+  source_sha256: 73c5f7b6a31b6b2a06ab1f7b80b06d938200820c34bf5d1c37b1243f3055caa8
+  adapted_sha256: cfc0441cb78732e38931b25847dd0d93253acdd16b4cfc72481a4d3d4423357b
+  reason: Original role prompt retained; unavailable tools and submission wording
+    translated. Explicit scope note covers implementation/upgrade tasks, shared workspace
+    and messaging schema.
+- path: planner/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/planner/prompt.md
+  source_sha256: a278697b188c526300e09dc6eba4a81aec0ff847999fe929dc09952fb0c25fa0
+  adapted_sha256: 2fe8d9661516a5a4f394a904a86385b392bf42ad6ca59c4ab5c8629228b55837
+  reason: Original role prompt retained; unavailable tools and submission wording
+    translated. Explicit scope note covers implementation/upgrade tasks, shared workspace
+    and messaging schema.
+- path: reviewer/prompt.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/reviewer/prompt.md
+  source_sha256: eacc5c80bffc930466788f4312fe10f2084e491a364bb9b62db5631db2bf507c
+  adapted_sha256: 06e11193cfe1ba4b42dec95b2618889c088f69f72ce87ddaef28bf751187a372
+  reason: Original role prompt retained; unavailable tools and submission wording
+    translated. Explicit scope note covers implementation/upgrade tasks, shared workspace
+    and messaging schema.
+- path: constitution.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/constitution.md
+  source_sha256: 9f7280092ed72d73b61fdea6a68789e57558eacb0bad671cbc494052ac524af0
+  adapted_sha256: 8860bcc229dd4b25b56db1612aa85484cea20cff47a27bd2d03801f4401c14db
+  reason: Original constraints retained; mission, path, tools, submission and unpromised
+    shell defaults translated.
+- path: developer/skills/codebase-navigation/SKILL.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/developer/skills/codebase-navigation/SKILL.md
+  source_sha256: 6568fbe2184e0afb536e1347c99d963df18eb20860cfc33e3721e839cce72209
+  adapted_sha256: ab2111ff9b5c54cb869c3d0e4590ecd4d929ceddcc102d8ccbf74d3ad0c417d3
+  reason: Upstream skill restored; only candidate path, unavailable editor and messaging
+    argument shape translated.
+- path: developer/skills/systematic-debugging/SKILL.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/developer/skills/systematic-debugging/SKILL.md
+  source_sha256: 208985328852bab5e131e5d4090d00320e0629839b0123b83f7ac02c59381e3d
+  adapted_sha256: 256bbff838a91a80f9191244ad1a33e2c08bfb2b9f60c763c5ab609ce4d0483a
+  reason: Upstream skill restored; only candidate path, unavailable editor and messaging
+    argument shape translated.
+- path: planner/skills/issue-analysis/SKILL.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/planner/skills/issue-analysis/SKILL.md
+  source_sha256: edd7a4a011f6f505f6ab1c1fc585d825091b533c0408fe84bcc0de8b21694e87
+  adapted_sha256: edd7a4a011f6f505f6ab1c1fc585d825091b533c0408fe84bcc0de8b21694e87
+  reason: Upstream skill restored; only candidate path, unavailable editor and messaging
+    argument shape translated.
+- path: planner/skills/reflection/SKILL.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/planner/skills/reflection/SKILL.md
+  source_sha256: 01412435d77a73b604977d340d77be022d454a77ede1bd5c0a94428f367d242b
+  adapted_sha256: 01412435d77a73b604977d340d77be022d454a77ede1bd5c0a94428f367d242b
+  reason: Upstream skill restored; only candidate path, unavailable editor and messaging
+    argument shape translated.
+- path: reviewer/skills/code-review-verification/SKILL.md
+  source: .cache/baselines/Meta-Team/agents/pool_SWE_Pro/reviewer/skills/code-review-verification/SKILL.md
+  source_sha256: 68916c5c3b50d178d2d2a27f0c3337b991568836110465fa31af7392f40aa14a
+  adapted_sha256: 3685d7a25c05672c0d138db4e7a677a54439004754f579a032dd8980e492e2ab
+  reason: Upstream skill restored; only candidate path, unavailable editor and messaging
+    argument shape translated.

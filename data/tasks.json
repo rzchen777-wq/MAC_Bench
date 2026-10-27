@@ -1,0 +1,383 @@
+{
+  "format": "collaboration.tasks.v1",
+  "tasks": [
+    {
+      "task_id": "op26_business_finance_001",
+      "world_revision": "b39d4fe01ce606691a5aed1e275abd486776518149ad86d35d38a557667d737d",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_001"
+    },
+    {
+      "task_id": "op26_business_finance_003",
+      "world_revision": "b2da133a2bec49b51617eea54a9bc593ee1d16d8cf75e95552228d19cdb3694a",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_003"
+    },
+    {
+      "task_id": "op26_business_finance_004",
+      "world_revision": "54e0be4f769c84a34bb7f2f5454b20881502767078344c5c02867bc6c5124626",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_004"
+    },
+    {
+      "task_id": "op26_business_finance_005",
+      "world_revision": "133f6cf73011f9b803902de8df6d235e8c1f2e515aa177e5ea2011abd77f7ba9",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_005"
+    },
+    {
+      "task_id": "op26_business_finance_006",
+      "world_revision": "4a65ed81b9fa1cc67f46666043a415bc8af738da4f1eeff092b9effafcd94ec1",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_006"
+    },
+    {
+      "task_id": "op26_business_finance_007",
+      "world_revision": "f92b8598aa0e6e6ccab2c446eb0a789d193b9b1fd8b95d1db2786daaeb428b80",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_007"
+    },
+    {
+      "task_id": "op26_business_finance_008",
+      "world_revision": "0d9f25f12f08f0e1a1a88b0fefb74131b64cc5dbc32b4ff278b937869fe9f7ec",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_008"
+    },
+    {
+      "task_id": "op26_business_finance_009",
+      "world_revision": "d0e920507c16e8abfa5593449fdf6cccd6a6faa8fdd1a8d363e6b51d7eced643",
+      "category": "business_finance",
+      "split": "test",
+      "bundle": "tasks/op26_business_finance_009"
+    },
+    {
+      "task_id": "black_formatter",
+      "world_revision": "a6d11aec0f597d1010adf37cc837629af286e8e774c9af7d55545bf2f5c016a4",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/black_formatter"
+    },
+    {
+      "task_id": "build_release",
+      "world_revision": "df76d3da5fd696fa5b66f07421fa289de5e27c37c54e187875767c401920f4d5",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/build_release"
+    },
+    {
+      "task_id": "datamodel_jsonschema",
+      "world_revision": "000c029ffa9087ce32bc4b4b1f03543fb6b0fdfe61a12d7c8854b53c9eddcbc1",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/datamodel_jsonschema"
+    },
+    {
+      "task_id": "hatchling_packages",
+      "world_revision": "4b7ceadcee67efebac279ed1fa309c1e14f03effa3d809264f5be04d518f6348",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/hatchling_packages"
+    },
+    {
+      "task_id": "installer_wheels",
+      "world_revision": "ec9fc0819c8e48f2bb0b7ca9b6ce785693a9cb65131bc027730fc3bd96ca16ac",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/installer_wheels"
+    },
+    {
+      "task_id": "isort_imports",
+      "world_revision": "d7a20c38814a5feb9e960488bf3a9ec6b2a692bb27e654824e66ffa64378fb7e",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/isort_imports"
+    },
+    {
+      "task_id": "packaging_standards",
+      "world_revision": "bdad53a583d183456d057172bfb9bda5460c644fc8047b2a65f81f8ac5ca897e",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/packaging_standards"
+    },
+    {
+      "task_id": "virtualenv_environments",
+      "world_revision": "776a2686055474a981fa41e96a0b0c4d959610ab330948c41ce39eee69edc247",
+      "category": "developer_release",
+      "split": "test",
+      "bundle": "tasks/virtualenv_environments"
+    },
+    {
+      "task_id": "cattrs_conversion",
+      "world_revision": "fb547c62cee6881d26ab8059ef7a66bbdffb81a6ccf41cb50e2ce128b1508f82",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/cattrs_conversion"
+    },
+    {
+      "task_id": "graphql_execution",
+      "world_revision": "3eab01014b2f0121b6eb8c4c8432c35a1b9e8fea1e6f6c6ffe0f8c7369544e1d",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/graphql_execution"
+    },
+    {
+      "task_id": "jinja_templates",
+      "world_revision": "7875b88bb193c8fa6f7a4212a660ed3cddf4aa924938ca5b29f283a60ace9346",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/jinja_templates"
+    },
+    {
+      "task_id": "lark_engine",
+      "world_revision": "c348224ab268988432ecba826814bfd357133f924684caeecea3fc8bea6fc012",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/lark_engine"
+    },
+    {
+      "task_id": "mistune_markdown",
+      "world_revision": "40c62b96ffe3fc8a95d50c2265899af4922fea2a05a6078d261e0d311f2fc77b",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/mistune_markdown"
+    },
+    {
+      "task_id": "networkx_routing",
+      "world_revision": "af8391e9fe43c0286ee8197447e3bb559814f9b2f6de39d76f1d38cd845e117d",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/networkx_routing"
+    },
+    {
+      "task_id": "rdflib_datasets",
+      "world_revision": "a6924453027f163f1c3dbb88b327a0cf5e270d45eb595f3759fac07532765a19",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/rdflib_datasets"
+    },
+    {
+      "task_id": "sqlglot_optimizer",
+      "world_revision": "6470a23860f5b7736025857cdcf577126a834c1eb79e5e86fcf5c890f53465ce",
+      "category": "platform_data",
+      "split": "test",
+      "bundle": "tasks/sqlglot_optimizer"
+    },
+    {
+      "task_id": "changedetection_monitoring",
+      "world_revision": "b2a2be99aaf8b38f2e6091cecda2fc22312766761bd2f664e0c81ffad116f096",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/changedetection_monitoring"
+    },
+    {
+      "task_id": "freshrss_labels",
+      "world_revision": "51801f5da7fdf3fb14ece2be7fb0f0ebe73af092b1d9422a4ba5c26f0c4bd70f",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/freshrss_labels"
+    },
+    {
+      "task_id": "healthchecks_monitoring",
+      "world_revision": "84d5e42f2fbb4abe48e1eb6f391bc53c6d05d33333a2cdfa076c54275e2820cb",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/healthchecks_monitoring"
+    },
+    {
+      "task_id": "helpdesk_tickets",
+      "world_revision": "865231b1a7913552deadac20487c107fa16f8d94b737b6db612debcd887dd970",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/helpdesk_tickets"
+    },
+    {
+      "task_id": "kanboard_project_roles",
+      "world_revision": "800c3caeda61ba8af67b4091c203a6a509e8820b16fb7171d6da5bc916dbe762",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/kanboard_project_roles"
+    },
+    {
+      "task_id": "linkding_bookmarks",
+      "world_revision": "586fc6d5b7e775201844ecd31bacbdf931bfaeb4544cf8dd08f1594fc957f876",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/linkding_bookmarks"
+    },
+    {
+      "task_id": "mealie_households",
+      "world_revision": "8267ec112e82e26534baeae99a98a9851af02a35fccaab9164d04f26751e1afe",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/mealie_households"
+    },
+    {
+      "task_id": "navidrome_multilibrary",
+      "world_revision": "287d3490d452ded65b8af8afdf044e54a08d2b8096d00aabcf8907bf8c9b5e78",
+      "category": "product_application",
+      "split": "test",
+      "bundle": "tasks/navidrome_multilibrary"
+    },
+    {
+      "task_id": "op26_project_content_operations_002",
+      "world_revision": "bf022150cc1208e60dd864b943b31d8f1983f070385cd2b21cc2298a9a11cd48",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_002"
+    },
+    {
+      "task_id": "op26_project_content_operations_003",
+      "world_revision": "0940b83f8e73c62b12b0c0f23b151fa555580554fcc5022b45c24f4b48a76f25",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_003"
+    },
+    {
+      "task_id": "op26_project_content_operations_004",
+      "world_revision": "45b3bb6676aba03c57a269f3c8d8a7ecd29099abb944263a4b2aa8ea71e86344",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_004"
+    },
+    {
+      "task_id": "op26_project_content_operations_005",
+      "world_revision": "0423fe265fb1b1a307835a6820640beee51b9f800af0e04a129552077b989af1",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_005"
+    },
+    {
+      "task_id": "op26_project_content_operations_006",
+      "world_revision": "51d38022643a6adb4398bfdbf162cc213db4944923edcaa8d3d249d9282e3e0e",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_006"
+    },
+    {
+      "task_id": "op26_project_content_operations_007",
+      "world_revision": "6e7d25062b22b1206eed1dc7a0cd28685391207b88ceb293015ef2134a30f941",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_007"
+    },
+    {
+      "task_id": "op26_project_content_operations_008",
+      "world_revision": "ce8c6c96875c885a13e0daadaf4fb5ecf367cf4d22b2dd59a4fb49e386c1ab25",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op26_project_content_operations_008"
+    },
+    {
+      "task_id": "op_project_content_operations_002",
+      "world_revision": "fbba6af50b8be8380d68a2b69c6a66c0060dba4f9a86d07e034234dc9e8564d2",
+      "category": "project_content_operations",
+      "split": "test",
+      "bundle": "tasks/op_project_content_operations_002"
+    },
+    {
+      "task_id": "op26_service_administration_001",
+      "world_revision": "1c88c7c4589123e3244a6766cffa56c7c1c3c08fb363cb80303ddd9fee97a0eb",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_001"
+    },
+    {
+      "task_id": "op26_service_administration_002",
+      "world_revision": "7c0c18df70258b9c99e4fa932e3a88cda4f00eda67a8622c9760494f3ddeb149",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_002"
+    },
+    {
+      "task_id": "op26_service_administration_003",
+      "world_revision": "53506dc1d2da509f1bbb9cb22f842ab5061452495e2a60ffa63e52c3ed7dc692",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_003"
+    },
+    {
+      "task_id": "op26_service_administration_004",
+      "world_revision": "416029b6ce81044b180e08f18ebfed8e591fa6c55096bbfcae520e2b9c3db48c",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_004"
+    },
+    {
+      "task_id": "op26_service_administration_005",
+      "world_revision": "c8678edbad9b6d06e0cf85e86fff6ff2e912108c950b8918cdb092c219efaf85",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_005"
+    },
+    {
+      "task_id": "op26_service_administration_006",
+      "world_revision": "aa2d81ce05a4239b98922bea0457ce8d3c33f1510af7a29ba5bd3b8839f1434d",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_006"
+    },
+    {
+      "task_id": "op26_service_administration_008",
+      "world_revision": "43d0d9487ba5be170bf13a699223043c7588268ad8ed7130342d8d7c9ffe9b10",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_008"
+    },
+    {
+      "task_id": "op26_service_administration_009",
+      "world_revision": "68a9048a74cc33350744691fc67833a6c8394f154d247daf145b22f3c8d26d57",
+      "category": "service_administration",
+      "split": "test",
+      "bundle": "tasks/op26_service_administration_009"
+    },
+    {
+      "task_id": "op26_business_finance_002",
+      "world_revision": "9fbbb2ab316bc2c74df590b233ddb23e93601d98464ca560c7165735df694435",
+      "category": "business_finance",
+      "split": "dev",
+      "bundle": "tasks/op26_business_finance_002"
+    },
+    {
+      "task_id": "flit_packages",
+      "world_revision": "d5d66a2f7b2b6b117f4d641b3ebbcd162da4dfd07dd626632d7e039385ff29e6",
+      "category": "developer_release",
+      "split": "dev",
+      "bundle": "tasks/flit_packages"
+    },
+    {
+      "task_id": "marshmallow_schemas",
+      "world_revision": "9135f34da61f27528036857ae16433b199d6362a517ff1299028d09cb6ac3d5f",
+      "category": "platform_data",
+      "split": "dev",
+      "bundle": "tasks/marshmallow_schemas"
+    },
+    {
+      "task_id": "paperless_workflows",
+      "world_revision": "efe11d4602c4575ceb5e707b3b2010ece5488ad52b6e1287849249923dd5d8c3",
+      "category": "product_application",
+      "split": "dev",
+      "bundle": "tasks/paperless_workflows"
+    },
+    {
+      "task_id": "op26_project_content_operations_001",
+      "world_revision": "d4f1e0108cec005a5bfc85d80072293cb27ef365f5809593e83b9b011cec80d3",
+      "category": "project_content_operations",
+      "split": "dev",
+      "bundle": "tasks/op26_project_content_operations_001"
+    },
+    {
+      "task_id": "op26_service_administration_007",
+      "world_revision": "33e0b819d554505cacf00aa0e3cb6b7f2a4b5bf5a09af5fa4c71c99dff9dd07e",
+      "category": "service_administration",
+      "split": "dev",
+      "bundle": "tasks/op26_service_administration_007"
+    }
+  ]
+}

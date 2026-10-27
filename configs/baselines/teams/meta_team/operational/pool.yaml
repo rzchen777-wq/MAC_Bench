@@ -1,0 +1,5 @@
+chairman: chairman
+settings:
+  max_seconds: 7200
+  max_messages: 600
+  reflection_phase_timeout: 300

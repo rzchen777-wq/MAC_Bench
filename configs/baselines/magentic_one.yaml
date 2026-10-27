@@ -1,0 +1,75 @@
+format: collaboration.method_spec.v1
+implementation_status: implemented
+method: magentic_one
+protocol_ref: configs/evaluation/baseline_protocol.yaml
+source:
+  repository: https://github.com/microsoft/autogen
+  revision: 027ecf0a379bcc1d09956d46d12d44a3ad9cee14
+  directory: .cache/baselines/Magentic-One
+adapter_entrypoint: mac_bench.baselines.magentic_one.tasks:MagenticOne
+variant: native_engineering_agents_application_api_operational_team
+llm:
+  base_url: null
+  model_name: null
+  api_key: null
+  api_key_env: MAC_BENCH_LLM_API_KEY
+  timeout_seconds: 180
+  max_retries: 0
+  thinking: disabled
+model_bindings:
+  orchestrator: experiment.model
+  workers: experiment.model
+  context_summarizer: experiment.model
+execution:
+  preserve: [MagenticOneGroupChat, TaskLedger, ProgressLedger, stall_replanning]
+  workspace: shared_episode_world
+  worker_tool_iterations_per_turn: 10
+  reset_conversation_resets_world: false
+  environment_tools_source: task.view.tools
+  worker_adaptation: engineering_native_coder_and_code_executor_operational_application_api_roles
+  host_file_browser_or_code_executor: false
+  web_surfer: omitted_no_browser_in_public_world_interface
+  stall_recovery: reset_stall_window_after_replanning_preserve_rounds_and_world
+  engineering_handoff: explicit_coder_code_block_to_computer_terminal_contract
+executor:
+  python: python
+  timeout: 120
+limits:
+  max_turns: 20
+  max_stalls: 3
+model_parameters:
+  temperature: 0.2
+  recovery_attempts: 2
+  recovery_max_tokens: 32768
+  max_tokens: 8192
+context_policy:
+  request_token_limit: 131072
+  target_input_tokens: 64000
+  summary_output_tokens: 12288
+  recent_turns: 5
+  recent_tokens: 20000
+  prune_old_reads: false
+  old_read_output_chars: 1600
+teams:
+  engineering:
+    - name: FileSurfer
+      implementation: native_file_surfer_remote_text_browser
+    - name: Coder
+      implementation: native_MagenticOneCoderAgent_sealed_prompt
+    - name: ComputerTerminal
+      implementation: native_CodeExecutorAgent_without_model
+  operational:
+    - name: Operator
+      description: Performs native application operations to complete assigned business work.
+      prompt: operational_operator.txt
+    - name: Analyst
+      description: Inspects records, identifiers, relationships and business constraints for the team.
+      prompt: operational_analyst.txt
+    - name: Reviewer
+      description: Checks observed outcomes against the public task and reports remaining discrepancies.
+      prompt: operational_reviewer.txt
+artifacts:
+  prompts: engineering_upstream_sealed_operational_application_api_adaptation
+  model_calls: recorded_litellm_gateway
+  messages: native_messages_jsonl
+  state: native_team_state

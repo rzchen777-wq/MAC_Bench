@@ -1,0 +1,14 @@
+name: worker-b
+description: "General-purpose worker \u2014 can do data collection, email sending,\
+  \ file writing, or any published application operation. Reports errors and unfinished\
+  \ work to the chairman."
+model: experiment.model
+temperature: 0.2
+max_tokens: 32768
+max_steps: 200
+tools:
+- list_apps
+- list_tools
+- describe_tool
+- call_tool
+- read_result

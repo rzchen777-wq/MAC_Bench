@@ -1,0 +1,15 @@
+*
+!pyproject.toml
+!LICENSE
+!README.md
+!src/
+!src/**
+!configs/
+!configs/**
+!data/
+!data/public_tasks.json
+!data/tasks.json
+!docker/
+!docker/**
+**/__pycache__/
+**/*.pyc
