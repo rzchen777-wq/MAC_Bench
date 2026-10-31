@@ -10,11 +10,8 @@
 ☁️ <a href="docs/environments.md">Environments</a>
 </p>
 <p align="center">
-<a href="https://github.com/rzchen777-wq/MAC_Bench/actions/workflows/tests.yml"><img src="https://github.com/rzchen777-wq/MAC_Bench/actions/workflows/tests.yml/badge.svg" alt="Offline checks"></a>
 <a href="#quickstart"><img src="https://img.shields.io/badge/Python-3.11%2B-6C5CE7" alt="Python 3.11 or later"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-238B78" alt="MIT license"></a>
-<a href="docs/tasks.md"><img src="https://img.shields.io/badge/Test_tasks-48-376AB3" alt="48 test tasks"></a>
-<a href="docs/tasks.md"><img src="https://img.shields.io/badge/Development_tasks-6-B87924" alt="6 development tasks"></a>
 </p>
 
 <a id="overview"></a>
