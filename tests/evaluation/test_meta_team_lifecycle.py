@@ -8,6 +8,8 @@ import pytest
 from mac_bench.baselines.common.source import source_modules
 from mac_bench.baselines.meta_team.tasks import native_environment, _install_native_lifecycle_status
 
+pytestmark = pytest.mark.baselines
+
 
 @pytest.mark.parametrize('stop', ['max_steps', 'model_error', 'reflection_wait'])
 def test_native_worker_liveness_and_messaging(tmp_path, monkeypatch, stop):

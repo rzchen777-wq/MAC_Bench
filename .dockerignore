@@ -1,6 +1,7 @@
 *
 !pyproject.toml
 !LICENSE
+!NOTICE
 !README.md
 !src/
 !src/**
@@ -9,6 +10,7 @@
 !data/
 !data/public_tasks.json
 !data/tasks.json
+!data/distribution.json
 !docker/
 !docker/**
 **/__pycache__/

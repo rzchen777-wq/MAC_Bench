@@ -197,6 +197,7 @@ def test_same_runner_accepts_operational_adapter(tmp_path):
         def stop_episode(self):self.active=False
         def agent_call(self,n,a):assert self.active;self.value=1;return {'data':{'value':1}}
         def evaluate(self):assert not self.active;return {'status':'passed','complete':True,'task_success':True,'gc':1}
+        def observe_and_evaluate(self):return {'observation':self.observe(),'evaluation':self.evaluate()}
         def export_receipts(self,p):p.write_text('receipt')
     class Owner:
         def __init__(self):self.session=Session();self.closed=False

@@ -44,7 +44,7 @@ def seal_bundle(directory, *, world_id, public_files, metadata):
     for path in files:
         _file(root, path)
     manifest = {
-        "format": "collaboration.world.v1",
+        "format": "mac_bench.task.v1",
         "world_id": world_id,
         "public_files": list(public_files),
         "files": files,
@@ -63,9 +63,9 @@ class WorldBundle:
     def load(cls, directory, *, verify=False):
         root = Path(directory).resolve()
         manifest = json.loads((root / "manifest.json").read_text())
-        if manifest.get("format") not in {"collaboration.world.v1", "mac_bench.task.v1"}:
+        if manifest.get("format") != "mac_bench.task.v1":
             raise ValueError("Unsupported world bundle format")
-        if verify or manifest["format"] == "collaboration.world.v1":
+        if verify:
             if manifest.get("revision") != digest(
                 {k: v for k, v in manifest.items() if k != "revision"}
             ):

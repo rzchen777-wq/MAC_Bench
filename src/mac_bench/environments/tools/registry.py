@@ -1,5 +1,6 @@
 """Immutable tool discovery with complete, revision-pinned pagination."""
 import re
+from difflib import get_close_matches
 from copy import deepcopy
 from hashlib import sha256
 
@@ -39,7 +40,11 @@ class ToolRegistry:
 
     def get(self, name):
         if name not in self._tools:
-            raise ToolError('tool_unavailable', 'This tool is not available to this session.')
+            candidates = get_close_matches(name, self._tools, n=4, cutoff=0.45)
+            hint = (' Similar available tools: ' + ', '.join(candidates) + '.') if candidates else ''
+            raise ToolError('tool_unavailable', 'Unknown tool name.' + hint
+                            + ' Call list_tools(query="entity or action") to find an available name, '
+                              'then describe_tool(tool_name=...) for its arguments.')
         return self._tools[name]
 
     def tools(self):

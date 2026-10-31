@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650" role="img" aria-labelledby="title description">
+<title id="title">MAC-Bench: interconnected tasks, shared environments, outcome evaluation</title>
+<desc id="description">A preschool task links admissions, places and family inductions. A software task links metadata and source selection to wheels and source archives. Agent systems choose how to coordinate these components, interact with real applications or a code workspace, and are evaluated on final outcomes.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#637690"/></marker>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; fill: #1b2c43; }
+    .heading { font-size: 22px; font-weight: 700; }
+    .body { font-size: 19px; }
+    .label { font-size: 18px; font-weight: 600; }
+    .muted { fill: #52657d; font-size: 18px; }
+    .edge { fill: none; stroke: #637690; stroke-width: 2.3; marker-end: url(#arrow); }
+  </style>
+</defs>
+<rect width="1120" height="650" rx="18" fill="#ffffff"/>
+<rect x="1" y="1" width="1118" height="648" rx="17" fill="none" stroke="#dce3ed"/>
+<rect x="24" y="24" width="1072" height="74" rx="12" fill="#182f50"/>
+<text x="44" y="56" style="fill:#ffffff;font-size:24px;font-weight:700">One objective. Interconnected work. Your agent system.</text>
+<text x="44" y="82" style="fill:#d6e3f7;font-size:18px">Choose the agents, divide the work, and coordinate their actions in a shared environment.</text>
+<text x="40" y="136" class="heading">Task &amp; starting materials</text>
+<text x="395" y="136" class="heading">Work that must fit together</text>
+<text x="810" y="136" class="heading">Actions &amp; outcomes</text>
+<!-- Business example -->
+<rect x="24" y="154" width="1072" height="194" rx="12" fill="#f0f5fc"/>
+<rect x="24" y="166" width="5" height="170" rx="2" fill="#4078b8"/>
+<text x="42" y="186" class="label" style="fill:#32679f">BUSINESS OPERATIONS</text>
+<text x="42" y="219" class="heading">Prepare a preschool intake</text>
+<text x="42" y="253" class="body">Applications &amp; signed evidence</text>
+<text x="42" y="281" class="body">Programmes &amp; place capacities</text>
+<text x="42" y="309" class="body">Family &amp; officer availability</text>
+<path d="M350 252 H378" class="edge"/>
+<rect x="394" y="175" width="160" height="57" rx="9" fill="#ffffff" stroke="#b9cde4"/>
+<text x="474" y="200" text-anchor="middle" class="label">Resolve</text><text x="474" y="221" text-anchor="middle" class="label">applications</text>
+<rect x="594" y="175" width="162" height="57" rx="9" fill="#ffffff" stroke="#b9cde4"/>
+<text x="675" y="200" text-anchor="middle" class="label">Allocate</text><text x="675" y="221" text-anchor="middle" class="label">suitable places</text>
+<path d="M555 203 H587" class="edge"/>
+<path d="M675 233 V256" class="edge"/>
+<rect x="394" y="263" width="362" height="45" rx="9" fill="#ffffff" stroke="#b9cde4"/>
+<text x="575" y="291" text-anchor="middle" class="label">Schedule family inductions</text>
+<text x="575" y="333" text-anchor="middle" class="muted">Same centre · qualified, available officer</text>
+<path d="M766 252 H795" class="edge"/>
+<text x="811" y="194" class="label">Update application records</text>
+<text x="811" y="224" class="body">Pretix · Twenty · HRMS</text>
+<path d="M812 241 H1074" stroke="#c8d8eb"/>
+<text x="811" y="271" class="body">Suitable place reservations</text>
+<text x="811" y="298" class="body">Coordinated appointments</text>
+<text x="811" y="325" class="body">Consistent centre rosters</text>
+<!-- Software example -->
+<rect x="24" y="364" width="1072" height="194" rx="12" fill="#f0f7f4"/>
+<rect x="24" y="376" width="5" height="170" rx="2" fill="#418878"/>
+<text x="42" y="396" class="label" style="fill:#317364">SOFTWARE ENGINEERING</text>
+<text x="42" y="429" class="heading">Complete Flit’s backend</text>
+<text x="42" y="463" class="body">Flit source workspace</text>
+<text x="42" y="491" class="body">API declarations &amp; documentation</text>
+<text x="42" y="519" class="body">Supporting code &amp; public tests</text>
+<path d="M350 462 H378" class="edge"/>
+<rect x="394" y="385" width="362" height="45" rx="9" fill="#ffffff" stroke="#b6d8cc"/>
+<text x="575" y="414" text-anchor="middle" class="label">Metadata &amp; source selection</text>
+<path d="M474 431 V459" class="edge"/><path d="M675 431 V459" class="edge"/>
+<rect x="394" y="466" width="160" height="45" rx="9" fill="#ffffff" stroke="#b6d8cc"/>
+<text x="474" y="495" text-anchor="middle" class="label">Source archives</text>
+<rect x="594" y="466" width="162" height="45" rx="9" fill="#ffffff" stroke="#b6d8cc"/>
+<text x="675" y="495" text-anchor="middle" class="label">Wheels</text>
+<path d="M555 489 H587" class="edge"/>
+<text x="575" y="543" text-anchor="middle" class="muted">Rebuild an archive into an installable wheel</text>
+<path d="M766 462 H795" class="edge"/>
+<text x="811" y="404" class="label">Edit, build &amp; test</text>
+<text x="811" y="434" class="body">Shared terminal workspace</text>
+<path d="M812 451 H1074" stroke="#c4ddd4"/>
+<text x="811" y="481" class="body">Installable packages</text>
+<text x="811" y="508" class="body">Usable imports &amp; resources</text>
+<text x="811" y="535" class="body">Working console commands</text>
+<!-- Common scoring -->
+<rect x="24" y="574" width="1072" height="52" rx="10" fill="#182f50"/>
+<text x="43" y="607" style="fill:#ffffff;font-size:20px;font-weight:600">Outcome evaluation</text>
+<text x="330" y="597" style="fill:#e5edf9;font-size:20px">Progress Score (PS)</text>
+<text x="330" y="619" style="fill:#bcd0e9;font-size:18px">Satisfied goals</text>
+<text x="730" y="597" style="fill:#e5edf9;font-size:20px">Resolution Rate (RR)</text>
+<text x="730" y="619" style="fill:#bcd0e9;font-size:18px">Complete success</text>
+</svg>

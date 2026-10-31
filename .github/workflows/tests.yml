@@ -1,19 +1,40 @@
 name: Offline checks
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install search dependency
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: python -m pip install -e '.[dev,agents]'
       - run: mac-bench doctor
       - run: mac-bench tasks list --split test --json
       - run: pytest
+
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build evaluation client
+        run: docker build -f docker/Dockerfile -t mac-bench:ci .
+      - name: Check packaged commands and dataset configuration
+        run: |
+          docker run --rm mac-bench:ci doctor
+          docker run --rm mac-bench:ci tasks list --split dev --json
+          docker run --rm mac-bench:ci data download --help
+          docker run --rm --entrypoint python mac-bench:ci -c 'import json; from pathlib import Path; r = json.loads(Path("data/distribution.json").read_text()); assert r["repo_id"] == "sihuichuibuqi/MAC-Bench"; assert r["revision"] == "v1.0"'

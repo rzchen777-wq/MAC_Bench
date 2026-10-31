@@ -127,9 +127,24 @@ class AgentTools:
         response = {**result, 'replayed': replayed, 'result_ref': result['call_id'], 'data_complete': True}
         if len(encoded(response).encode()) > 14000:
             response = {k: response[k] for k in ('call_id', 'status', 'replayed', 'result_ref')}
+            data = result.get('data')
+            path = '/data'
+            if isinstance(data, dict):
+                # Present ordinary query rows and native REST collections directly.
+                for key in ('rows', 'results', 'edges'):
+                    if isinstance(data.get(key), list):
+                        path += '/' + key
+                        response['row_count'] = len(data[key])
+                        if data[key] and isinstance(data[key][0], dict):
+                            response['columns'] = list(data[key][0])[:32]
+                        break
+            if result.get('pagination') is not None:
+                response['pagination'] = result['pagination']
             response.update(data=None, data_complete=False,
-                            result_page=self.read_result(result['call_id'], path=''),
-                            instruction='Use read_result with result_ref and returned paths to retrieve the complete saved receipt; no app call is repeated.')
+                            result_page=self.read_result(result['call_id'], path=path),
+                            instruction='Continue read_result with this result_ref, result_page.path and next_cursor. '
+                            'This reads the saved receipt without another app call. Native collection pagination, '
+                            'when present, is separate from receipt pagination.')
         return response
 
     def query_result(self, result_ref, **options):

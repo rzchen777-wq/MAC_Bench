@@ -1,23 +1,28 @@
 """Run a business task from OCI images and ordinary initial-state files."""
 
 import io
+from concurrent.futures import ThreadPoolExecutor
+
 import json
 import os
 import shlex
 import tarfile
 import tempfile
 import shutil
+from hashlib import sha256
+from collections import Counter
 from pathlib import Path
 
 from mac_bench.runtime.paths import repository_root
 from mac_bench.runtime.common.hashing import digest
 from mac_bench.runtime.sandbox.modal import ModalSandboxBackend, native_host_image
 from mac_bench.environments.packaging.lifecycle import (
-    install_query_tools,
+    install_public_resources,
     install_private_verifier,
     start_service,
 )
 from mac_bench.environments.packaging.modal_session import ModalWorldSession
+from mac_bench.environments.packaging.background import configure_hrms_shifts
 
 
 def selected_images(directory, tags):
@@ -61,9 +66,38 @@ def selected_images(directory, tags):
     return {**index, "manifests": entries}, sorted(blobs)
 
 
+def shared_image_blobs(directory):
+    """Blobs reused by multiple application images form one cached build layer."""
+    directory = Path(directory)
+    index = json.loads((directory / "index.json").read_text())
+    counts = Counter()
+    for entry in index["manifests"]:
+        tag = entry.get("annotations", {}).get("org.opencontainers.image.ref.name")
+        if tag:
+            _, blobs = selected_images(directory, {tag})
+            counts.update(blobs)
+    return sorted(name for name, count in counts.items() if count > 1)
+
+
+def image_context(source, destination, blobs):
+    """Use hardlinks for build contexts so local preparation does not duplicate OCI data."""
+    for name in blobs:
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(source / name, target)
+        except OSError:
+            shutil.copyfile(source / name, target)
+
+
 def upload_file(sandbox, source, target):
     """Stream large environment files without holding an image in host RAM."""
     sandbox.raw.filesystem.copy_from_local(source, target)
+
+
+PREFIX = ('environments',)
+RUNTIME_DIRECTORIES = {"apps", "catalog", "tools", "verification", "runtime", "packaging", "business"}
+PACKAGE_FILES = {"__init__.py", "runtime/__init__.py", 'environments/__init__.py', 'environments/errors.py'}
 
 
 def runtime_source():
@@ -71,13 +105,26 @@ def runtime_source():
     stream = io.BytesIO()
     with tarfile.open(fileobj=stream, mode="w:gz") as archive:
         for file in sorted(root.rglob("*")):
+            relative = file.relative_to(root)
+            parts = relative.parts
+            included = (
+                relative.as_posix() in PACKAGE_FILES
+                or relative.as_posix().startswith("runtime/common/")
+                or (parts[:len(PREFIX)] == PREFIX and len(parts) > len(PREFIX)
+                    and parts[len(PREFIX)] in RUNTIME_DIRECTORIES)
+            )
             if (
-                file.is_file()
+                included and file.is_file()
                 and "__pycache__" not in file.parts
                 and file.suffix in {".py", ".json", ".txt"}
             ):
                 archive.add(file, arcname="mac_bench/" + str(file.relative_to(root)))
     return stream.getvalue()
+
+
+# Bump for changes to the prepared image layout or base dependencies.
+# Runtime code, startup policy and task wording do not invalidate app images.
+PREPARED_FORMAT = 1
 
 
 class PortableBusinessWorld:
@@ -91,16 +138,32 @@ class PortableBusinessWorld:
         self.environment = json.loads(config_path.read_text())
         cache = repository_root() / ".cache/business" / bundle.manifest["world_id"]
         self.cache_directory = cache
-        self.snapshot_name = "business-" + bundle.manifest["revision"]
+        image_root = repository_root() / "data/environments/images"
+        self.image_index, self.image_blobs = selected_images(
+            image_root, {service["image"] for service in self.environment["services"]}
+        )
+        images = sorted(entry["digest"] for entry in self.image_index["manifests"])
+        # Cache the application state, not the task wording or outcome checks.
+        environment_files = {
+            str(path.relative_to(bundle.root / "environment")): sha256(path.read_bytes()).hexdigest()
+            for path in sorted((bundle.root / "environment").rglob("*"))
+            if path.is_file() and path.relative_to(bundle.root / "environment").parts[0] not in {"runtime", "images"}
+        }
+        self.snapshot_name = "business-" + digest({
+            "environment": environment_files, "images": images,
+            "prepared_format": PREPARED_FORMAT,
+        })
         self.backend = backend or ModalSandboxBackend(
             vm_runtime=True,
             timeout=7200,
             snapshot_directory=cache,
             cpu=float(os.environ.get("MAC_BENCH_CPUS", "4")),
-            memory_mib=int(os.environ.get("MAC_BENCH_MEMORY_MIB", "16384")),
+            memory_mib=int(os.environ.get("MAC_BENCH_MEMORY_MIB", "8192")),
         )
         self.sandbox = None
         self.closed = False
+        self.runtime_installed = False
+        self.runtime_code_installed = False
 
     def command(self, command, timeout=300):
         result = self.backend.exec(self.sandbox, command, timeout=timeout)
@@ -128,9 +191,7 @@ class PortableBusinessWorld:
                 self._restore()
                 return self
             image_root = repository_root() / "data/environments/images"
-            index, blobs = selected_images(
-                image_root, {s["image"] for s in self.environment["services"]}
-            )
+            index, blobs = self.image_index, self.image_blobs
             # Modal uploads build-context files through its blob store and reuses
             # unchanged layers. Large images never travel through exec logs.
             cache = (
@@ -138,42 +199,36 @@ class PortableBusinessWorld:
             )
             cache.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(prefix="images-", dir=cache) as temporary:
-                directory = Path(temporary)
-                for name in blobs:
-                    target = directory / name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    try:
-                        os.link(image_root / name, target)
-                    except OSError:
-                        shutil.copyfile(image_root / name, target)
-                (directory / "index.json").write_text(json.dumps(index))
-                (directory / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
+                common = Path(temporary) / "common"
+                task = Path(temporary) / "task"
+                common.mkdir()
+                task.mkdir()
+                shared = sorted(set(shared_image_blobs(image_root)) & set(blobs))
+                image_context(image_root, common, shared)
+                image_context(image_root, task, sorted(set(blobs) - set(shared)))
+                (common / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
+                (task / "index.json").write_text(json.dumps(index))
+                # All tasks reuse the same application-image layer. Only the
+                # selected manifest and task-specific deltas vary per build.
                 image = (
                     native_host_image()
                     .apt_install("skopeo")
                     .pip_install(
-                        "PyYAML",
-                        "jsonschema",
-                        "graphql-core",
-                        "openapi-schema-validator",
+                        "PyYAML", "jsonschema", "graphql-core", "openapi-schema-validator",
                     )
-                    .add_local_dir(directory, "/work/environment/images", copy=True)
+                    .add_local_dir(common, "/work/environment/images", copy=True)
+                    .add_local_dir(task, "/work/environment/images", copy=True)
                 )
                 self.sandbox = self.backend.create(
                     name="mac-bench-business", image=image
                 )
             self._event("allocated")
             self.command("mkdir -p /work/world/src /work/sessions")
-            self.backend.write_file(
-                self.sandbox, path="/work/runtime.tar.gz", content=runtime_source()
-            )
-            self.command(
-                "tar xzf /work/runtime.tar.gz -C /work/world/src && rm /work/runtime.tar.gz"
-            )
+            self._install_runtime()
             root = self.bundle.root / "environment"
             small_files = {}
             for file in sorted(root.rglob("*")):
-                if not file.is_file() or "images" in file.relative_to(root).parts:
+                if not file.is_file() or file.relative_to(root).parts[0] in {"images", "runtime"}:
                     continue
                 rel = file.relative_to(root)
                 if rel.parts[0] == "runtime":
@@ -182,21 +237,7 @@ class PortableBusinessWorld:
                     target = Path("/work").joinpath(*rel.parts[1:])
                 else:
                     target = Path("/work/environment") / rel
-                if file.suffix == ".py":
-                    content = (
-                        file.read_bytes()
-                        .replace(
-                            b"evoteam.collaboration.realize", b"mac_bench.environments"
-                        )
-                        .replace(
-                            b"mac_bench.construction.realize", b"mac_bench.environments"
-                        )
-                        .replace(
-                            b"evoteam.collaboration.common", b"mac_bench.runtime.common"
-                        )
-                    )
-                    small_files[str(target)] = content
-                elif file.stat().st_size < 16 * 1024 * 1024:
+                if file.stat().st_size < 16 * 1024 * 1024:
                     small_files[str(target)] = file.read_bytes()
                 else:
                     self.command(shlex.join(["mkdir", "-p", str(target.parent)]), 30)
@@ -217,41 +258,55 @@ class PortableBusinessWorld:
             self.close()
             raise
 
-    def _restore(self):
-        # Application snapshots cache data and dependencies. Runtime code always
-        # comes from the installed package, including after local edits.
+    def _install_runtime_code(self):
+        if self.runtime_code_installed:
+            return
         self.backend.write_file(
             self.sandbox, path="/work/runtime.tar.gz", content=runtime_source()
         )
         self.command(
-            "tar xzf /work/runtime.tar.gz -C /work/world/src && rm /work/runtime.tar.gz"
+            "rm -rf /work/world && mkdir -p /work/world/src && tar xzf /work/runtime.tar.gz -C /work/world/src && rm /work/runtime.tar.gz"
         )
-        self.command(
-            "PYTHONPATH=/work/world/src python3 -m mac_bench.environments.business.worker /work/environment",
-            1200,
-        )
-        profile = (
-            (self.bundle.root / "private/profile.py")
-            .read_bytes()
-            .replace(b"evoteam.collaboration.realize", b"mac_bench.environments")
-            .replace(b"mac_bench.construction.realize", b"mac_bench.environments")
-        )
-        self.backend.write_file(
-            self.sandbox, path="/work/world/profile.py", content=profile
-        )
-        install_query_tools(
-            self.backend,
-            self.sandbox,
-            namespace="mac_bench.environments",
-            bundle=self.bundle,
-        )
+        self.runtime_code_installed = True
+
+    def _install_runtime(self):
+        if self.runtime_installed:
+            return
+        self._install_runtime_code()
+        root = self.bundle.root / "environment/runtime"
+        files = {
+            "/work/world/" + str(path.relative_to(root)): path.read_bytes()
+            for path in root.rglob("*") if path.is_file()
+        }
+        if not self.bundle.manifest["metadata"].get("private_verifier_observer_profile"):
+            files["/work/world/profile.py"] = (self.bundle.root / "private/profile.py").read_bytes()
+        if files:
+            self.backend.write_files(self.sandbox, files=files)
+        install_public_resources(self.backend, self.sandbox, bundle=self.bundle)
         install_private_verifier(self.backend, self.sandbox, self.bundle)
+        self.runtime_installed = True
+
+    def _restore(self):
+        # Each new sandbox receives current code/config. Resets reuse that code
+        # and restore the complete application data before checking the initial state.
+        self._install_runtime_code()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            restored = pool.submit(self.command,
+                "PYTHONPATH=/work/world/src python3 -m mac_bench.environments.business.worker /work/environment", 1200)
+            self._install_runtime()
+            restored.result()
+        scheduling = configure_hrms_shifts(self.backend, self.sandbox,
+            {'containers': [service['name'] for service in self.environment['services']]})
+        if scheduling:
+            self._event('scheduling_policy_applied', policy=scheduling)
         start_service(self.backend, self.sandbox)
         self.session = ModalWorldSession(self.backend, self.sandbox)
         self.assert_initial()
         self._event("ready")
 
     def reset(self):
+        self.session.stop_episode()
+        self.session.close()
         self.command(
             "pkill -f '^python3 -m mac_bench.environments.packaging.server' || true", 30
         )
@@ -287,13 +342,13 @@ class PortableBusinessWorld:
 
     def assert_initial(self):
         expected = json.loads((self.bundle.root / "private/initial.json").read_text())
-        observed = self.session.observe()
-        if digest(expected) != digest(observed):
+        observed_digest = self.session.observe_digest()
+        if digest(expected) != observed_digest:
             raise RuntimeError(
                 "Restored native business state differs from packaged initial state"
             )
-        self.initial_observation = observed
-        return {"matches": True, "digest": digest(observed)}
+        self.initial_observation = expected
+        return {"matches": True, "digest": observed_digest}
 
 
     def __exit__(self, *exc):

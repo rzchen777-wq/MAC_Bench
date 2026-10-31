@@ -1,6 +1,8 @@
 """Inspect task environments, check Modal loading, and export Docker build materials."""
 
 import argparse
+from mac_bench.environments.engineering.public_workspace import initialization_commands
+
 import json
 import shutil
 from pathlib import Path
@@ -102,20 +104,19 @@ def export_docker_context(record, output):
         target = task / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(world.root / name, target)
-    fixture = world.manifest["metadata"].get("fixture_archive")
-    fixture_command = ""
+    metadata = world.manifest["metadata"]
+    fixture = metadata.get("fixture_archive")
+    fixture_copy = ""
     if fixture:
-        shutil.copyfile(world.root / fixture, public / "fixture.tar")
-        fixture_command = "tar xf /work/public/fixture.tar -C /work\n"
+        shutil.copyfile(world.root / fixture, task / "fixtures.tar")
+        fixture_copy = 'COPY fixtures.tar /work/fixtures.tar\n'
     (task / "initialize.sh").write_text(
         "#!/bin/sh\nset -eu\nmkdir -p /work/project\ntar xf /work/source.tar -C /work/project\n"
-        + fixture_command
-        + "cd /work/project\n"
-        + environment["build"]
-        + "\n"
+        + initialization_commands(environment, metadata)
     )
     (task / "Dockerfile").write_text(
-        'ARG BASE_IMAGE=mac-bench-software-base\nFROM ${BASE_IMAGE}\nCOPY source.tar /work/source.tar\nCOPY public /work/public\nCOPY initialize.sh /tmp/initialize.sh\nRUN sh /tmp/initialize.sh\nRUN cp /work/public/task.txt /work/TASK.md\nWORKDIR /work/project\nCMD ["/bin/bash"]\n'
+        'ARG BASE_IMAGE=mac-bench-software-base\nFROM ${BASE_IMAGE}\nCOPY source.tar /work/source.tar\nCOPY public /work/public\n'
+        + fixture_copy + 'COPY initialize.sh /tmp/initialize.sh\nRUN sh /tmp/initialize.sh\nRUN cp /work/public/task.txt /work/TASK.md\nWORKDIR /work/project\nCMD ["/bin/bash"]\n'
     )
     (output / "task.json").write_text(
         json.dumps(

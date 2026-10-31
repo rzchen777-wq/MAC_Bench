@@ -4,19 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mac-bench"
-version = "0.0.1"
+version = "1.0.0"
 description = "MAC-Bench: multi-agent collaboration tasks and evaluation"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "PyYAML>=6",
+    "huggingface_hub>=1.0,<2",
     "python-dotenv>=1",
     "Pillow>=10",
     "jsonschema>=4.21",
     "graphql-core>=3.2,<3.3",
     "openapi-schema-validator>=0.6,<0.7",
 ]
+
+[project.urls]
+Repository = "https://github.com/rzchen777-wq/MAC_Bench"
+Documentation = "https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/getting-started.md"
+Dataset = "https://huggingface.co/datasets/sihuichuibuqi/MAC-Bench"
+Issues = "https://github.com/rzchen777-wq/MAC_Bench/issues"
 
 [project.optional-dependencies]
 agents = ["litellm>=1.0", "orjson>=3.9", "tqdm>=4.66", "numpy>=1.26", "fastapi>=0.110"]
@@ -36,7 +43,10 @@ include = ["mac_bench*"]
 exclude = ["artifacts*", "collaboration*", "third_party*", "runs*", "evolution*", "shared*", "tests*", "build*", ".*"]
 
 [tool.setuptools.package-data]
+"mac_bench.environments.packaging" = ["*.txt", "*.md"]
 "*" = ["prompts/*.txt", "prompts/*.json", "prompts/*/*.txt", "prompts/*/*.json", "README.txt", "assets/**/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/test_dataset.py", "tests/test_environment.py", "tests/test_release_tasks.py", "tests/test_download.py", "tests/runtime"]
+testpaths = ["tests"]
+tmp_path_retention_policy = "failed"
+markers = ["baselines: native baseline integration using pinned external dependencies"]

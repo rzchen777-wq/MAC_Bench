@@ -12,3 +12,5 @@ dist/
 outputs/
 data/tasks/
 data/environments/
+
+HF_token

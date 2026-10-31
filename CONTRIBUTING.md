@@ -1,6 +1,23 @@
 # Contributing
 
-Install development dependencies with `pip install -e '.[dev,agents]'` and run `pytest`.
-The default tests use local fixtures and do not allocate cloud environments.
+## Develop and test
 
-For task issues, include the task ID, package checksum, public operation and a minimal reproduction. Keep model credentials out of logs. Tool and evaluator changes should include a regression test for the affected behavior.
+From the repository root:
+
+```bash
+sudo apt-get install ripgrep
+pip install -e '.[dev,agents]'
+pytest
+```
+
+The default suite covers local fixtures, task loading, downloads, environment lifecycle and runtime behavior. Installed task packages also receive material and verifier checks. Native baseline integration is available with `pytest --run-baselines`; see [Tests](tests/README.md) for dependencies. Tests use scripted model responses and do not start cloud environments.
+
+For a change to environment loading, run `mac-bench environment check --task-id TASK_ID --out outputs/environment-check` on an affected task. See [Environments](docs/environments.md) for setup and result fields.
+
+## Report an issue
+
+Include the task ID, command, relevant configuration and a small reproduction. For evaluation failures, include the episode status and relevant log excerpt. Remove credentials from any shared logs.
+
+## Submit a change
+
+Describe the behavior being changed and how it was checked. Tool or evaluator fixes should include a regression test. Update the corresponding guide when a command, task interface or result field changes.

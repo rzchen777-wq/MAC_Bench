@@ -6,7 +6,7 @@ from mac_bench.runtime.llm.config import LLMConfig
 
 
 class LLMConfigTest(unittest.TestCase):
-    def test_evoteam_variables_take_precedence_and_key_is_redacted(self) -> None:
+    def test_benchmark_variables_take_precedence_and_key_is_redacted(self) -> None:
         config = LLMConfig.from_env(
             {
                 "MAC_BENCH_LLM_BASE_URL": "https://gateway.example/v1/",

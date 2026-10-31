@@ -46,6 +46,8 @@ def validate(schema, value):
                 detail = 'expected type: ' + str(e.validator_value)
             elif e.validator == 'enum':
                 detail = 'expected one of: ' + names(e.validator_value)
+            elif e.validator == 'format':
+                detail = 'expected format: ' + str(e.validator_value)
             issue = f"{'.'.join(map(str, e.path)) or '$'}: {detail}"
             if issue not in issues:
                 issues.append(issue)

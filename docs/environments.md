@@ -1,35 +1,41 @@
 # Environments
 
-The evaluator and agent system run on your machine; Modal hosts isolated task environments. Install `pip install -e '.[modal]'`, extract the task data, and authenticate with `modal token new`.
+[Home](../README.md) · [Getting started](getting-started.md) · [Tasks](tasks.md) · [Evaluation](evaluation.md) · [Agent integration](agents.md) · **Environments**
 
-## Business tasks
+The evaluator and agent system run on your machine; Modal hosts isolated task environments. First use prepares the required image. Later episodes reuse the prepared image and load independent task states.
 
-Business tasks use real application services: Twenty, Pretix, HRMS and BigCapital. The dataset separates shared application images from each task's initial records and configuration:
+Install `pip install -e '.[modal,agents]'`, load the dataset, and authenticate with `modal token new`. The [getting-started guide](getting-started.md) covers this sequence.
+
+## Business operations
+
+Business tasks use Twenty, Pretix, HRMS and BigCapital as required by the task. Shared application images provide the services; per-task data supplies the initial records and configuration.
 
 ```text
-data/environments/images/              # OCI image store; shared layers appear once
-data/tasks/<task_id>/environment/       # Service configuration and initial state
+data/environments/images/             Shared application images (OCI)
+data/tasks/<task_id>/environment/      Task configuration and initial data
 ```
 
-On first use, the loader creates a VM in your Modal account, loads the task's application images and restores its initial data. It caches this prepared environment in your account for subsequent episodes. Tool definitions and the outcome verifier are installed from the local checkout.
+On first use, the loader imports the application images and caches the prepared VM, then restores the task data. Shared OCI layers are reused across tasks. `mac-bench data download` installs the selected tasks' image layers and the small shared OCI metadata index; loading a task requires no other task's image layers. Each episode receives an independent environment; resets recreate its containers and restore the initial volumes. Initial records are checked after loading and resetting.
 
-Each episode receives its own application state. A reset recreates the task's containers and restores its initial volumes. The loader checks the restored records against `private/initial.json` before exposing task tools.
+The environment cache follows application configuration, initial data, and image contents. Editing task instructions, tool bindings, or verifiers reuses that cache and installs the current runtime when opening the task. Resets reuse the installed runtime.
 
-The default business VM has 4 CPUs and 16 GiB of memory. Set `MAC_BENCH_CPUS` and `MAC_BENCH_MEMORY_MIB` to change these allocations. Runtime caches live under `.cache/business/<task_id>/`.
+The default business VM has **4 CPUs and 8 GiB of memory**. Pretix runs two web workers and two background workers. Independent applications start concurrently, and tool calls reuse a persistent connection. Set VM CPU and memory allocations with `MAC_BENCH_CPUS` and `MAC_BENCH_MEMORY_MIB`. Local preparation records are stored under `.cache/business/<task_id>/`.
 
-## Software tasks
+## Software engineering
 
-Software environments separate installed dependencies from the task workspace. The loader builds a dependency image in your account, loads starter source and public fixtures, then runs the task's initialization command. Private tests run in a separate grading sandbox.
+Software tasks have a dependency image and a per-episode source workspace. The loader builds the dependency image, loads starter code and public fixtures, then runs the task's initialization command. Private tests run in a separate grading sandbox.
 
-Prepare a dependency image before evaluation:
+Prepare an image ahead of evaluation:
 
 ```bash
-mac-bench environment prepare --task-id black_formatter
+mac-bench environment prepare --task-id flit_packages
 ```
 
-Dependency images are cached by their base image and setup recipe under `.cache/environments/`. Tasks with the same recipe reuse that image and receive separate workspaces. Set `MAC_BENCH_ENVIRONMENT_CACHE` to choose another cache directory.
+Tasks with the same dependency recipe can reuse the cached image while receiving separate workspaces. Local dependency records live in `.cache/environments/`; set `MAC_BENCH_ENVIRONMENT_CACHE` to choose another directory.
 
-## Check loading
+## Check loading and reset
+
+Inspect local metadata, then perform a complete load/reset check:
 
 ```bash
 mac-bench environment describe --task-id op26_service_administration_007
@@ -37,14 +43,41 @@ mac-bench environment check \
   --task-id op26_service_administration_007 --out outputs/environment-check
 ```
 
-`describe` reads local metadata. `check` starts the environment, checks its initial state, resets it, checks again and closes it. It uses cloud compute but no solver model. The output directory contains the report and runtime logs.
+`describe` reads metadata without launching a sandbox. `check` opens the environment, checks its initial state, resets it, checks again and closes it. The check uses cloud compute but no model calls.
 
-## Reset and cleanup
+A successful preschool check reports these fields in `report.json`:
 
-All agents in an episode share one environment. Separate episodes use isolated environments. Evaluation closes task and grader sandboxes on completion or error; cached images and local run results remain available.
+```json
+{
+  "initial": {"matches": true},
+  "reset": {"matches": true}
+}
+```
 
-Delete a task's local cache directory to rebuild its environment. This does not delete task data or a remote Modal image. [Modal's dashboard](https://modal.com/apps) lists active sandboxes and stored images in your account.
+This excerpt omits the task identity, digests and runtime details in the full report. A matching digest after reset confirms that the observed state returned to its starting point.
 
-## Docker
+## Lifecycle and resource settings
 
-The [Docker guide](../docker/README.md) provides a containerized evaluation client and software dependency/workspace build contexts. The client uses the same Modal loaders. Business application images use the standard OCI format and can be inspected with tools such as Skopeo.
+All workers in an episode share one environment. Independent episodes receive isolated environments. The evaluator closes task and grader sandboxes when an episode finishes or raises an error; prepared images and local output files remain available for reuse or inspection.
+
+| Setting or location | Purpose |
+| --- | --- |
+| `MAC_BENCH_CPUS` | Business VM CPU allocation; default 4 |
+| `MAC_BENCH_MEMORY_MIB` | Business VM memory; default 8192 MiB |
+| `MAC_BENCH_ENVIRONMENT_CACHE` | Software dependency cache directory |
+| `.cache/business/<task_id>/` | Business environment preparation records |
+| `.cache/environments/` | Software dependency image records |
+| Evaluation `--out` directory | Episode results and logs |
+
+Removing a local cache record triggers preparation again. Remote images and task data remain separate. Use [Modal's dashboard](https://modal.com/apps) to inspect active resources in your account.
+
+## Docker client and build contexts
+
+The [Docker guide](../docker/README.md) runs the evaluation client in a container with the same Modal task loaders. It also explains how to export Docker build contexts for software dependencies and task workspaces:
+
+```bash
+mac-bench environment docker-context \
+  --task-id flit_packages --out outputs/docker/flit_packages
+```
+
+The exported `base/` and `task/` directories contain Dockerfiles and build instructions. Business application images are distributed in OCI format.

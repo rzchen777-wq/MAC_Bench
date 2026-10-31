@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from mac_bench.environments.tools.api import INTERFACE_VERSION, dispatch
+from mac_bench.environments.verification.contracts import digest
 from mac_bench.environments.tools.contracts import ToolError
 
 
@@ -57,6 +58,8 @@ def serve(root, port):
                 elif self.path == "/owner/interface":
                     result = {"tool_api_version": INTERFACE_VERSION,
                               "owner_capabilities": ["observe_and_evaluate"]}
+                elif self.path == "/owner/observe_digest":
+                    result = {"digest": digest(world.observe())}
                 elif self.path == "/owner/observe":
                     result = world.observe()
                 elif self.path == "/owner/evaluate":

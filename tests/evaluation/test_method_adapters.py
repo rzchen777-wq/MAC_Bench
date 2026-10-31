@@ -14,6 +14,8 @@ from mac_bench.runtime.sandbox.base import CommandResult
 from mac_bench.baselines.aorchestra.tasks import AOrchestra
 from mac_bench.baselines.meta_team.tasks import MetaTeam
 
+pytestmark = pytest.mark.baselines
+
 
 class Encoder:
     def encode(self,text):return np.array([1.,2.,3.])
@@ -43,6 +45,7 @@ class NativeOwner:
     def evaluate(self):
         assert not self.active
         n=len(self.writes);return {'status':'passed' if n>=2 else 'failed','complete':n>=2,'gc':min(n/2,1),'task_success':n>=2}
+    def observe_and_evaluate(self):return {'observation':self.observe(),'evaluation':self.evaluate()}
     def export_receipts(self,path):path.write_bytes(b'receipts')
 
 
@@ -111,7 +114,9 @@ def test_original_methods_reach_both_task_families(tmp_path,method,domain):
     calls=[json.loads(p.read_text()) for p in sorted((tmp_path/'episode/model_calls').glob('*.json'))]
     assert all(c['identity']['agent_id'] and c['identity']['logical_call_id'] for c in calls)
     assert 'SECRET' not in json.dumps([c['messages'] for c in calls])
-    assert before==dict(os.environ) and cwd==Path.cwd()
+    assert set(before) == set(os.environ), 'Baseline changed environment variable names'
+    assert all(os.environ[k] == v for k, v in before.items()), 'Baseline changed environment variable values'
+    assert cwd == Path.cwd()
     manifest=json.loads((tmp_path/'episode/native/method.json').read_text())
     assert manifest['resolved_config_hash']==result['method_provenance']['resolved_config_hash']
     if method=='aorchestra':
@@ -410,14 +415,15 @@ def test_magentic_one_file_surfer_reads_pages_and_searches_in_candidate(tmp_path
         commands.append(command)
         # Test-only transport: run the fixed browser program against a local
         # temporary candidate instead of a remote Modal project directory.
-        # Extract the user command from the current full-output capture shell,
-        # without interpreting the trailing ') > log' as part of Python code.
         wrapper = shlex.split(command)
-        inner = wrapper[wrapper.index('-c') + 1][:-1]  # closing capture subshell
-        python, option, program = shlex.split(inner)
+        assert wrapper[:2] == ['python3', '-c']
+        python, option, program = shlex.split(wrapper[3])
         assert option == '-c'
         program = program.replace("pathlib.Path('/work/project')", f'pathlib.Path({str(candidate)!r})')
-        run = subprocess.run([python, option, program], capture_output=True, text=True, timeout=timeout)
+        wrapper[3] = shlex.join([python, option, program])
+        wrapper[4] = str(candidate)
+        wrapper[5] = str(tmp_path / f'browser-{len(commands)}.log')
+        run = subprocess.run(wrapper, capture_output=True, text=True, timeout=timeout)
         return CommandResult(command, run.returncode, run.stdout+run.stderr, .01)
     owner.execute = execute
     values = ['Facts.', 'Inspect notes.', magentic_ledger('FileSurfer'),
@@ -529,6 +535,8 @@ def test_magentic_one_bounds_coordinator_context_and_preserves_current_ledger(tm
     from mac_bench.baselines.magentic_one.tasks import MagenticOne
     from mac_bench.evaluation.episodes.identity import call_identity
     task,owner=handle(tmp_path,domain)
+    # Leave room for the current business tool definitions, then exceed it
+    # with an observation so this tests compaction of history.
     large='Large observed state with exact references. '*500
     if domain=='engineering':
         original=owner.execute
@@ -553,7 +561,8 @@ def test_magentic_one_bounds_coordinator_context_and_preserves_current_ledger(tm
             return super().complete(messages,**options)
     client=SummaryScript(magentic_changes(domain, facts='Given facts.', plan='PLAN_MARKER: Make two changes.'))
     method=MagenticOne();method.spec['model_parameters']['max_tokens']=512
-    method.spec['context_policy']=dict(request_token_limit=8192,target_input_tokens=3000,
+    method.spec['context_policy']=dict(request_token_limit=8192 if domain=='engineering' else 16384,
+        target_input_tokens=3000 if domain=='engineering' else 8000,
         summary_output_tokens=512,recent_turns=1,old_read_output_chars=1600)
     result=run_episode(task,method,client,output=tmp_path/'episode',
         budget=AgentBudget(max_model_calls=40,max_tool_calls=20,max_tokens=10000,max_wall_seconds=30))

@@ -91,6 +91,21 @@ def json_object_document(value):
         return None
 
 
+def json_keys_match(value, keys):
+    """Compare actual object keys, rejecting duplicate keys and malformed JSON."""
+    document = json_object_document(value)
+    try:
+        expected = json.loads(keys)
+        return int(document is not None and isinstance(expected, list)
+                   and all(isinstance(key, str) for key in expected)
+                   and set(json.loads(document)) == set(expected))
+    except (ValueError, TypeError, RecursionError):
+        return 0
+
+
+FUNCTIONS = FUNCTIONS | {'json_keys_match'}
+
+
 def integer_id(value, json_type):
     """Normalize only explicitly selected integer IDs, preserving type checks.
 
@@ -210,6 +225,7 @@ class QueryEngine:
             db.create_function('try_utc_timestamp', 1, try_utc_timestamp, deterministic=True)
             db.create_function('try_elapsed_seconds', 2, try_elapsed_seconds, deterministic=True)
             db.create_function('json_object_document', 1, json_object_document, deterministic=True)
+            db.create_function('json_keys_match', 2, json_keys_match, deterministic=True)
             db.create_function('integer_id', 2, integer_id, deterministic=True)
             self.invalid_value_functions = install_checked_value_functions(db)
             db.execute('PRAGMA query_only=ON')

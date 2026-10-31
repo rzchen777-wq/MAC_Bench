@@ -118,7 +118,7 @@ def output_result(result, log_path):
         if key in metadata:
             response[key] = metadata[key]
     if response['output_truncated']:
-        response['instruction'] = ('Full stdout/stderr is saved at full_output_path. Search it with rg '
+        response['instruction'] = ('Full stdout/stderr is saved at full_output_path. Search it with grep '
             'or inspect selected lines with sed/head/tail through terminal; avoid printing the whole log. '
             'The recorded exit_code belongs to your command, not the preview.')
     return response

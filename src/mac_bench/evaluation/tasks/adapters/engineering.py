@@ -9,7 +9,7 @@ from ..terminal_output import capture_command, output_result
 TERMINAL = ToolDefinition('terminal',
     'Run a shell command in /work/project. Edit source and run public checks in the persistent workspace. '
     'Use the interpreter and dependencies described in the task. Full stdout/stderr is saved at '
-    'full_output_path; large output returns a bounded preview. Use rg or selected line ranges on that '
+    'full_output_path; large output returns a bounded preview. Use grep or selected line ranges on that '
     'file instead of rerunning the command or printing the entire log. Nonzero exit codes are returned. '
     'Timeout stops the command process group. Each command and its descendants share a 6 GiB resident-memory cap; '
     'individual processes also have a 6 GiB data-allocation cap. Workspace files persist after limits.',

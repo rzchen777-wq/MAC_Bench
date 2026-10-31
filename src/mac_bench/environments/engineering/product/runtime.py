@@ -11,6 +11,7 @@ from pathlib import Path
 from .artifacts import fingerprint, write_json
 from .verifier import score_product
 from .infrastructure import load_override
+from ..public_workspace import initialization_commands
 
 
 def modal_backend(directory, timeout=7200):
@@ -332,27 +333,20 @@ class LoadedProductWorld:
             # code must not retrieve the removed implementation from upstream.
             self.runtime.open(snapshot=self.snapshot, network_blocked=True)
             self.runtime.install_source(self.bundle.root / self.meta["workspace_archive"])
-            if fixture := self.meta.get("fixture_archive"):
-                self.runtime.backend.write_file(self.runtime.sandbox, path="/work/fixtures.tar",
-                                                content=(self.bundle.root / fixture).read_bytes())
-                result = self.runtime.command("fixtures", "tar xf /work/fixtures.tar -C /work")
-                if result.exit_code:
-                    raise RuntimeError("Cannot load public synthetic fixture")
-            # Infrastructure images deliberately contain no task source. Run
-            # the sealed public initialization after loading the starter so
-            # databases, static assets and local demo files exist for the solver
-            # just as they do for independent grading. Network remains blocked.
-            if self.runtime.build().exit_code:
-                raise RuntimeError("Cannot initialize public candidate workspace; inspect build log")
-            # Materialize public files individually; large support data must not
-            # become part of the agent's mandatory task/context prefix.
             public_names = self.bundle.manifest['public_files']
             for name in public_names:
                 self.runtime.backend.write_file(self.runtime.sandbox, path='/work/' + name,
                                                 content=(self.bundle.root / name).read_bytes())
+            if fixture := self.meta.get("fixture_archive"):
+                self.runtime.backend.write_file(self.runtime.sandbox, path="/work/fixtures.tar",
+                                                content=(self.bundle.root / fixture).read_bytes())
+            result = self.runtime.command(
+                "initialize-public-workspace",
+                initialization_commands(self.environment, self.meta),
+                timeout=self.environment.get('build_timeout', 1800))
+            if result.exit_code:
+                raise RuntimeError("Cannot initialize public candidate workspace; inspect initialization log")
             task = (self.bundle.root / 'public/task.txt').read_text()
-            task += '\n\nPublic materials (read as needed):\n' + '\n'.join(
-                '/work/' + name for name in public_names)
             self.runtime.backend.write_file(self.runtime.sandbox, path="/work/TASK.md", content=task.encode())
             return self
         except BaseException:

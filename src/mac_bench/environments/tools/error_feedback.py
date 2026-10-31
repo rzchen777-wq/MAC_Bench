@@ -4,6 +4,7 @@ import json
 import re
 
 from mac_bench.environments.errors import NativeGraphQLFailure, NativeHTTPFailure
+from mac_bench.environments.tools.contracts import encoded
 
 RULES = {
     'unsupported_operation': ('refund not available for this payment method',
@@ -108,6 +109,28 @@ def feedback(exc, tool):
                 if item not in errors:
                     errors.append(item)
     visit(payload)
+    # Enrich native choice failures with the published contract, not an opaque
+    # native payload or a guess about the correct business decision.
+    def choices_for(field):
+        values = []
+        def scan(schema):
+            if isinstance(schema, dict):
+                definition = schema.get('properties', {}).get(field, {})
+                choices = definition.get('enum', []) if isinstance(definition, dict) else []
+                if choices and choices not in values:
+                    values.append(choices)
+                for child in schema.values():
+                    scan(child)
+            elif isinstance(schema, list):
+                for child in schema:
+                    scan(child)
+        scan(tool.input_schema)
+        return values[0] if len(values) == 1 and len(encoded(values[0])) <= 500 else None
+    for item in errors:
+        if item.get('field') and item['rule'] == 'invalid_choice':
+            choices = choices_for(item['field'])
+            if choices:
+                item['allowed_values'] = choices
     status = getattr(exc, 'status', None)
     if schema_mismatch:
         return {'code': 'native_schema_mismatch', 'http_status': status, 'field_errors': [],

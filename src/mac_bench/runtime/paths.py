@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def repository_root():
-    configured = os.environ.get('MAC_BENCH_ROOT') or os.environ.get('EVOTEAM_ROOT')
+    configured = os.environ.get('MAC_BENCH_ROOT')
     if configured:
         root = Path(configured).expanduser().resolve()
         if (root/'src/mac_bench').is_dir() and (root/'pyproject.toml').is_file():
@@ -19,7 +19,7 @@ def repository_root():
 
 
 def artifact_root():
-    configured = os.environ.get('MAC_BENCH_OUTPUT_ROOT') or os.environ.get('EVOTEAM_ARTIFACT_ROOT')
+    configured = os.environ.get('MAC_BENCH_OUTPUT_ROOT')
     return Path(configured).expanduser().resolve() if configured else repository_root()/'outputs'
 
 

@@ -102,7 +102,10 @@ def main(argv=None):
     parser.add_argument('command', choices=('download','verify','import','install','export'))
     parser.add_argument('--task-id', action='append')
     parser.add_argument('--split', choices=('dev','test'))
-    parser.add_argument('--url', help='URL of the release downloads.json')
+    parser.add_argument('--url', help='Use an HTTP mirror downloads.json instead of Hugging Face')
+    parser.add_argument('--repo-id', help='Hugging Face dataset repository')
+    parser.add_argument('--revision', help='Dataset tag or commit')
+    parser.add_argument('--max-workers', type=int, default=4, help='Concurrent Hugging Face downloads (default: 4)')
     parser.add_argument('--source', type=Path, help='A dataset checkout containing data/tasks.json')
     parser.add_argument('--archive', type=Path, help='One task archive')
     parser.add_argument('--out', type=Path, help='Export directory')
@@ -111,9 +114,18 @@ def main(argv=None):
     if args.split:
         rows = [row for row in rows if row['split'] == args.split]
     if args.command == 'download':
-        if not args.url:parser.error('download requires --url pointing to downloads.json')
-        from mac_bench.download import download_tasks
-        download_tasks(repository_root(),args.url,rows)
+        if args.max_workers < 1:
+            parser.error('--max-workers must be positive')
+        if args.url:
+            if args.repo_id or args.revision:
+                parser.error('--url cannot be combined with --repo-id or --revision')
+            from mac_bench.download import download_tasks
+            download_tasks(repository_root(), args.url, rows)
+        else:
+            from mac_bench.download import download_hub_tasks
+            release = json.loads((base / 'distribution.json').read_text())
+            download_hub_tasks(repository_root(), rows, repo_id=args.repo_id or release['repo_id'],
+                               revision=args.revision or release['revision'], max_workers=args.max_workers)
         return 0
     if args.command == 'import' and args.source is None:
         parser.error('import requires --source')

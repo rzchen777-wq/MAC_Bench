@@ -29,6 +29,7 @@ def test_pool_hash_covers_assets_under_runs_and_survives_relocation(tmp_path):
 
 
 @pytest.mark.parametrize('name',['react_single','aorchestra','meta_team','magentic_one'])
+@pytest.mark.baselines
 def test_each_method_selects_its_litellm_connection_and_redacts_manifest(tmp_path,name,monkeypatch):
     spec=yaml.safe_load((SPECS/(name+'.yaml')).read_text())
     spec['llm'].update(base_url='http://model.example/v1',model_name='selected-model',

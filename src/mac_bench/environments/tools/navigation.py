@@ -47,6 +47,17 @@ def brief(value, path, *, inline_bytes=600):
             for key in ('type', '$ref', 'description'):
                 if key in value and len(encoded(value[key]).encode()) <= 200:
                     result[key] = deepcopy(value[key])
+            if inline_bytes >= 2000:
+                # A long record still exposes its identity and short fields on
+                # the first page. This preview never replaces the saved value.
+                preview = {}
+                for key, item in value.items():
+                    if not isinstance(item, (dict, list)) and len(encoded(item).encode()) <= 300:
+                        candidate = {**preview, key: item}
+                        if len(encoded(candidate).encode()) <= 1200:
+                            preview = candidate
+                if preview:
+                    result['preview'] = preview
         return result
     return {'path': path, 'kind': 'string' if isinstance(value, str) else 'scalar',
             'characters': len(str(value)), 'complete': False}

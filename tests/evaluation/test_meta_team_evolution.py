@@ -11,6 +11,8 @@ from mac_bench.baselines.meta_team.evolution import DevEvolution, load_frozen
 from mac_bench.baselines.common.config import ROOT, tree_hash
 from test_method_adapters import handle, Script, response, operations
 
+pytestmark = pytest.mark.baselines
+
 PATCH = 'Dispatch assignments with explicit acceptance criteria and non-overlapping mutation scopes.'
 
 
@@ -215,7 +217,7 @@ class StructuralClient(ReflectingClient):
         step = self.structural_steps
         self.structural_steps += 1
         if step == 0:
-            config = yaml.safe_load((ROOT / 'collaboration/evaluation/configs/teams/meta_team/engineering/reviewer/config.yaml').read_text())
+            config = yaml.safe_load((ROOT / 'configs/baselines/teams/meta_team/engineering/reviewer/config.yaml').read_text())
             config['max_steps'] = 77
             if self.communication:
                 config['tools'].append('send_message')
@@ -265,14 +267,14 @@ def test_completed_native_promotion_can_resume_without_model_or_world(tmp_path, 
     task.record = replace(task.record, split='dev')
     evolution = DevEvolution(tmp_path / 'dev')
     original = MetaTeam._validate_evolved
-    def legacy_validator(self, domain, pool):
+    def reject_promotion(self, domain, pool):
         config = yaml.safe_load((pool / 'reviewer/config.yaml').read_text())
         if 'send_message' in config['tools']:
-            raise ValueError('Legacy adapter rejects native communication')
+            raise ValueError('Injected promotion validation failure')
         return original(self, domain, pool)
-    monkeypatch.setattr(MetaTeam, '_validate_evolved', legacy_validator)
+    monkeypatch.setattr(MetaTeam, '_validate_evolved', reject_promotion)
     client = StructuralClient(communication=True)
-    with pytest.raises(ValueError, match='Legacy adapter'):
+    with pytest.raises(ValueError, match='Injected promotion'):
         evolution.run_case(task.record, client, task_factory=lambda *a: task,
             budget=AgentBudget(max_model_calls=25, max_tool_calls=20, max_tokens=10000, max_wall_seconds=30))
     assert owner.closed and evolution.state['status'] == 'blocked'

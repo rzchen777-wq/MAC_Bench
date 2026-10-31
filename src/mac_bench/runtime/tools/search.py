@@ -179,7 +179,11 @@ def _grep_fallback_command(
         parts.append(f"--include={glob}")
     parts.extend(("--", query, path))
     command = " ".join(shlex.quote(part) for part in parts)
-    return f"{command} | head -n {max(1, int(max_lines))}"
+    # Keep grep's error status; head alone would hide invalid expressions.
+    script = (f"{command} | head -n {max(1, int(max_lines))}; "
+              'status=${PIPESTATUS[0]}; '
+              'if [ "$status" = 141 ]; then exit 0; fi; exit "$status"')
+    return "bash -c " + shlex.quote(script)
 
 
 def _parse_grep_lines(output: str) -> list[dict[str, Any]]:

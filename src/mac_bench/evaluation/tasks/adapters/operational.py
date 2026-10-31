@@ -131,9 +131,7 @@ class OperationalTask(OwnedTask):
 
     def observe_and_evaluate(self):
         self._require_evaluation()
-        if hasattr(self._session, 'observe_and_evaluate'):
-            return self._session.observe_and_evaluate()
-        return {'observation': self.observe(), 'evaluation': self.evaluate()}
+        return self._session.observe_and_evaluate()
 
     def export_receipts(self, destination):
         self._session.export_receipts(Path(destination) / 'native_calls.sqlite')

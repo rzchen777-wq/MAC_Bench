@@ -48,7 +48,7 @@ class PublicResources:
                         'public/facts.json': 'Source-linked initial evidence tables and labelled facts. Query /tables or /fields to find data; not live application state or task answers.',
                         'public/registers.json': 'Public register titles, field schemas and source passages. Use matching registers.* tools; formatting checks do not grade business decisions.',
                         'public/data_guide.md': 'SQL data-workspace examples, result references, register schemas and application-state boundaries.',
-                        'public/identities.json': 'Original internal-key identity map, retained for compatibility.',
+                        'public/identities.json': 'Native identifiers for the task records.',
                         'public/environment.md': 'Application objects, identifier namespaces and short resource-query examples.',
                         'public/recording.md': 'Required business record formats and identifier meanings.',
                         'public/record_forms.json': 'Public typed administrative forms: field schemas and storage mappings, without task solutions.',

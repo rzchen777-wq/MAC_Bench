@@ -150,7 +150,7 @@ def test_identity_accepts_member_lists_and_hashes_pool_artifacts(monkeypatch):
     method = SimpleNamespace(name='magentic_one', spec={'teams': {'engineering': [{'name': 'Coder'}]}})
     assert episode_identity(record, method, connection, AgentBudget(), 1)['assets'] == {}
     method.name = 'meta_team'
-    method.spec['teams']['engineering'] = {'artifact': 'collaboration/evaluation/configs/teams/meta_team/engineering'}
+    method.spec['teams']['engineering'] = {'artifact': 'configs/baselines/teams/meta_team/engineering'}
     assert episode_identity(record, method, connection, AgentBudget(), 1)['assets'] == {'engineering': 'content-hash'}
 
 

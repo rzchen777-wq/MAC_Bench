@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Mapping
 
@@ -86,7 +87,7 @@ class FilesystemSandboxBackend(SandboxBackend):
         if self.fail_replace_suffix and str(target).endswith(self.fail_replace_suffix):
             raise RuntimeError("injected replace failure")
         target.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=".evoteam-")
+        descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=".mac-bench-")
         try:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(content)
@@ -337,6 +338,17 @@ def test_search_falls_back_to_grep_when_ripgrep_is_missing(
     assert result.data["matches"][0]["line"] == 2
     assert "used grep fallback" in result.data["warnings"][0]
     assert "needle here" in str(result.openai_content())
+
+    invalid = phase3_tool_registry().execute(
+        "search", {"query": "[", "regex": True}, context,
+    )
+    assert invalid.status == "failed"
+    assert invalid.error["code"] == ToolErrorCode.INVALID_ARGUMENTS
+    missing = phase3_tool_registry().execute("search", {"query": "absent"}, context)
+    assert missing.status == "completed" and missing.data["matches"] == []
+    (root / "many.txt").write_text("needle\n" * 10000)
+    limited = phase3_tool_registry().execute("search", {"query": "needle", "limit": 1}, context)
+    assert limited.status == "completed" and limited.data["next_offset"] == 1
 
 
 def test_read_csv_handles_bom_multiline_records_and_raw_values(tool_context) -> None:
@@ -804,21 +816,38 @@ def _memory_process_context(
     return backend, sandbox, context
 
 
+def _wait_for_process_output(registry, context, started, expected):
+    output = started.data["output"]
+    deadline = time.monotonic() + 5
+    while expected not in output and time.monotonic() < deadline:
+        result = registry.execute(
+            "process", {"action": "poll", "session_id": started.data["session_id"],
+                        "wait_ms": 100}, context,
+        )
+        assert result.status == "completed"
+        output += result.data["output"]
+    assert expected in output, output
+
+
 def test_exec_yields_and_poll_returns_only_new_output() -> None:
     backend, sandbox, context = _memory_process_context()
     registry = phase5_tool_registry()
     started = registry.execute(
         "exec",
         {
-            "command": "python -u -c 'import time; print(\"first\", flush=True); time.sleep(.3); print(\"second\")'",
+            "command": "python -u -c 'print(\"first\", flush=True); input(); print(\"second\")'",
             "yield_time_ms": 100,
         },
         context,
     )
     assert started.status == "completed"
     assert started.data["status"] == "running"
-    assert "first" in started.data["output"]
+    _wait_for_process_output(registry, context, started, "first")
     session_id = started.data["session_id"]
+    written = registry.execute(
+        "process", {"action": "write", "session_id": session_id, "data": "\n"}, context,
+    )
+    assert written.status == "completed"
 
     finished = registry.execute(
         "process",
@@ -1086,11 +1115,12 @@ def test_process_kill_reports_escalation_and_exec_shares_workspace() -> None:
     stubborn = registry.execute(
         "exec",
         {
-            "command": "python -c 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(10)'",
+            "command": "python -c 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(\"ready\", flush=True); time.sleep(30)'",
             "yield_time_ms": 100,
         },
         context,
     )
+    _wait_for_process_output(registry, context, stubborn, "ready")
     killed = registry.execute(
         "process",
         {"action": "kill", "session_id": stubborn.data["session_id"]},

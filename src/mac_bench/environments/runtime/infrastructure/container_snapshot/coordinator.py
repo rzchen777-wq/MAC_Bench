@@ -11,6 +11,7 @@ import subprocess
 import time
 import uuid
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from http.client import HTTPConnection, HTTPException
 from pathlib import Path
@@ -241,8 +242,16 @@ class ContainerSnapshots:
         # A captured group is also fully stopped. Recreate its writable layers
         # when cloning the VM filesystem; old overlay mounts may carry stale
         # filesystem handles across kernels even though the data image is intact.
-        self.require_phase({'quiesced', 'captured'})
-        current = self.assert_stopped()
+        self.require_phase({'quiesced', 'captured', 'resumed'})
+        discard = self.state['phase'] == 'resumed'
+        if discard:
+            current = {name: self.engine.inspect(name) for name in self.names}
+            if {name: info['Id'] for name, info in current.items()} != self.state['current_ids']:
+                raise SnapshotError('container_snapshot_service_replaced_outside_checkpoint')
+        else:
+            current = self.assert_stopped()
+        # Verify the original checkpoint before discarding an episode. Saving a
+        # NEW checkpoint still requires quiesce(); reset never saves dirty state.
         directory, manifest = self.verified(token)
         if self.topology(current) != manifest['mounts']:
             raise SnapshotError('container_snapshot_mount_topology_changed')
@@ -258,7 +267,7 @@ class ContainerSnapshots:
         self.save('restoring', replacements={}, pending=None)
         for name in reversed(self.names):
             self.save(pending={'operation': 'remove_stopped_container', 'container': name})
-            self.engine.call('DELETE', '/containers/' + current[name]['Id'], query={'v': 'false', 'force': 'false'})
+            self.engine.call('DELETE', '/containers/' + current[name]['Id'], query={'v': 'false', 'force': 'true' if discard else 'false'})
             self.save(pending=None)
         for source, mount in manifest['mounts'].items():
             if mount['writable']:
@@ -317,28 +326,39 @@ class ContainerSnapshots:
         return {'running_containers': self.state['current_ids'], 'readiness_verified': True}
 
     def start_services(self, current):
-        running = {}
-        for name in self.names:
-            self.save(pending={'operation': 'start', 'container': name})
-            self.engine.call('POST', '/containers/' + current[name]['Id'] + '/start')
-            self.save(pending={'operation': 'readiness', 'container': name})
-            deadline = time.monotonic() + self.spec['readiness_timeout_seconds']
-            while True:
-                info = self.engine.inspect(name)
-                if not info['State']['Running'] or info['State'].get('Restarting'):
-                    raise SnapshotError('container_snapshot_resumed_service_exited')
-                healthy = info['State'].get('Health', {}).get('Status', 'healthy') == 'healthy'
-                try:
-                    ready = healthy and self.probe(name, info)
-                except (OSError, TimeoutError, HTTPException, subprocess.TimeoutExpired):
-                    ready = False
-                if ready:
-                    break
-                if time.monotonic() >= deadline:
-                    raise SnapshotError('container_snapshot_service_readiness_timeout')
-                time.sleep(min(1, max(0, deadline - time.monotonic())))
-            running[name] = info
-            self.save(pending=None)
+        """Start independent applications together; release dependents when ready."""
+        running, started = {}, {}
+        dependencies = self.spec.get('dependencies')
+        if dependencies is None:
+            dependencies = {name: self.names[:i] for i, name in enumerate(self.names)}
+        def ready(name):
+            info = self.engine.inspect(name)
+            if not info['State']['Running'] or info['State'].get('Restarting'):
+                raise SnapshotError('container_snapshot_resumed_service_exited')
+            healthy = info['State'].get('Health', {}).get('Status', 'healthy') == 'healthy'
+            try:
+                return info if healthy and self.probe(name, info) else None
+            except (OSError, TimeoutError, HTTPException, subprocess.TimeoutExpired):
+                return None
+
+        with ThreadPoolExecutor(max_workers=len(self.names)) as pool:
+            while len(running) < len(self.names):
+                for name in self.names:
+                    if name in started or not set(dependencies[name]) <= running.keys():
+                        continue
+                    self.save(pending={'operation': 'start', 'container': name})
+                    self.engine.call('POST', '/containers/' + current[name]['Id'] + '/start')
+                    started[name] = time.monotonic()
+                waiting = [name for name in self.names if name in started and name not in running]
+                for name, info in zip(waiting, pool.map(ready, waiting)):
+                    if info is not None:
+                        running[name] = info
+                    elif time.monotonic() - started[name] >= self.spec['readiness_timeout_seconds']:
+                        self.save(pending={'operation': 'readiness', 'container': name})
+                        raise SnapshotError('container_snapshot_service_readiness_timeout')
+                if len(running) < len(self.names):
+                    time.sleep(0.2)
+        self.save(pending=None)
         return running
 
     def resume(self):

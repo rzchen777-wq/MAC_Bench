@@ -44,7 +44,7 @@ def test_catalogue_classification_and_public_boundary(tmp_path,category):
         task=open_task(r,tmp_path/'runtime',owner=SimpleNamespace())
     public=json.dumps(task.view.as_dict())
     assert 'PRIVATE ANSWER' not in public and str(b.root) not in public and 'evaluate' not in [t.name for t in task.view.tools]
-    assert {t.name for t in task.view.tools}==({'terminal'} if category in {'product_application','platform_data','developer_release'} else {'list_apps','list_tools','describe_tool','call_tool','read_result','query_result','list_resources','read_resource','query_resource','search_resource'})
+    assert {t.name for t in task.view.tools}==({'terminal'} if category in {'product_application','platform_data','developer_release'} else {'list_apps','list_tools','describe_tool','call_tool','read_result','query_result','compute','list_resources','read_resource','query_resource','search_resource'})
 
 
 def test_catalogue_rejects_revision_duplicates_and_category_conflict(tmp_path):
@@ -210,6 +210,7 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
     support = b'LARGE SUPPORT DATA\n' * 1000
     (root / 'public/fixtures.txt').write_bytes(support)
     writes = {}
+    commands = []
     class Backend:
         def write_file(self, sandbox, *, path, content):
             assert isinstance(content, bytes)
@@ -223,7 +224,8 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
             self.sandbox = object()
         def install_source(self, path):
             pass
-        def build(self):
+        def command(self, name, command, *, timeout):
+            commands.append((name, command, timeout))
             return SimpleNamespace(exit_code=0)
         def close(self):
             self.sandbox = None
@@ -233,12 +235,13 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
     world.bundle = SimpleNamespace(root=root, manifest={'public_files': ['public/task.txt', 'public/fixtures.txt']})
     world.meta = {'initial_snapshot': 'snapshot', 'workspace_archive': 'private/starter.tar'}
     world._sealed_environment = {}  # Fixture bypasses the normal constructor.
-    world.environment = {'image': 'python:3.12-slim', 'setup': 'true'}
+    world.environment = {'image': 'python:3.12-slim', 'setup': 'true', 'build': 'true'}
     world.open()
     assert writes['/work/public/fixtures.txt'] == support
     assert b'LARGE SUPPORT DATA' not in writes['/work/TASK.md']
-    assert b'/work/public/fixtures.txt' in writes['/work/TASK.md']
-    assert b'Implement the documented feature.' in writes['/work/TASK.md']
+    assert writes['/work/TASK.md'] == (root / 'public/task.txt').read_bytes()
+    assert commands == [('initialize-public-workspace',
+                         'set -eu\nmkdir -p /work/project\ncd /work/project\ntrue\n', 1800)]
 
 
 def test_resource_unicode_and_escaping_are_byte_bounded_and_lossless(tmp_path):

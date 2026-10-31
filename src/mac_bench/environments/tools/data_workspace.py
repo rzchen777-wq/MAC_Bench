@@ -23,7 +23,7 @@ COMPUTE_SCHEMA = object_schema({
     'sql': {'type': 'string', 'minLength': 1, 'maxLength': 40000},
     'parameters': {'type': 'array', 'maxItems': 1000,
         'items': {'type': ['string', 'number', 'integer', 'null', 'boolean']}},
-    'output': {'enum': ['rows', 'json'], 'default': 'rows'},
+    'output': {'enum': ['rows', 'json_value'], 'default': 'rows'},
     'request_id': {'type': 'string', 'minLength': 1, 'maxLength': 128},
 }, ['sources', 'sql', 'request_id'])
 DESCRIPTION = (
@@ -32,7 +32,7 @@ DESCRIPTION = (
     'an explicitly selected JSON string. Array objects become rows with their exact field names; '
     'nested objects/arrays are JSON strings usable with json_extract/json_each. Use JOIN, GROUP BY, '
     'DISTINCT, arithmetic, round and SQLite JSON functions. Pass values through parameters (SQL ?). '
-    'output=rows returns data.rows; output=json requires one JSON-text cell and returns decoded '
+    'output=rows returns data.rows; output=json_value decodes one JSON-text cell into '
     'data.value, useful for building tool arguments with json_object/json_group_array. Results are '
     'saved receipts: pass their reference to call_tool.arguments_ref or another compute source. '
     'No files, network, native database, task solution, grading or application writes are available. '
@@ -91,6 +91,8 @@ def _scalar(value):
 
 def execute_sql(sources, sql, parameters=(), output='rows'):
     """Each call gets a fresh in-memory DB. Authorizer forbids all writes/file access."""
+    if output not in ('rows', 'json_value'):
+        raise ToolError('invalid_arguments', 'output must be rows or json_value; omit it for ordinary table queries.')
     if len(encoded(sources).encode()) > 10_000_000:
         raise ToolError('data_input_too_large', 'Selected inputs exceed 10 MB; select smaller collections.')
     db = sqlite3.connect(':memory:')
@@ -166,13 +168,19 @@ def execute_sql(sources, sql, parameters=(), output='rows'):
                 raise ToolError('data_output_too_large', 'Query exceeds 50,000 output rows or 10 MB; narrow it or aggregate.')
             rows.append(item)
         result = {'input_tables': counts, 'row_count': len(rows), 'source': 'derived_data_not_application_state'}
-        if output == 'json':
+        if output == 'json_value':
             if len(rows) != 1 or len(labels) != 1 or not isinstance(rows[0][labels[0]], str):
-                raise ToolError('invalid_json_output', 'output=json requires one row and one JSON-text column.')
+                raise ToolError('invalid_json_output',
+                    f'Query returned {len(rows)} rows and {len(labels)} columns. '
+                    'output=json_value requires exactly one cell containing JSON text. '
+                    'For a table, omit output or set output="rows" and use a new request_id. '
+                    'The query was read-only; no application state changed.')
             try:
                 result['value'] = json.loads(rows[0][labels[0]])
             except ValueError:
-                raise ToolError('invalid_json_output', 'The selected cell is not valid JSON.') from None
+                raise ToolError('invalid_json_output', 'The selected cell is not valid JSON. '
+                    'For ordinary text or table results, omit output or set output="rows" and use a new request_id. '
+                    'The query was read-only; no application state changed.') from None
         else:
             result['rows'] = rows
         return result
