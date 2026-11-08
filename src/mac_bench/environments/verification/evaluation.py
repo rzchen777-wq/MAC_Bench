@@ -5,7 +5,7 @@ from mac_bench.environments.verification.sql import QueryEngine
 from mac_bench.environments.verification.scoring import score_goals
 
 
-def evaluate(contract, current, *, provenance='supplied_snapshot', max_steps=2_000_000):
+def evaluate(contract, current, *, provenance='supplied_snapshot', max_steps=20_000_000):
     verify_package(contract)
     results = []
     try:

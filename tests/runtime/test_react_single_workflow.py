@@ -13,7 +13,8 @@ from mac_bench.runtime.agents.workflow import (
 )
 from mac_bench.runtime.types import PublicTask
 from mac_bench.runtime.llm.client import ChatMessage, ChatResponse, ModelOutputTruncatedError
-from mac_bench.runtime.sandbox.base import CommandResult, SandboxHandle
+from mac_bench.runtime.sandbox.base import CommandResult, SandboxHandle, BackendProcessHandle, BackendProcessSnapshot
+from mac_bench.runtime.sandbox.memory import MemorySandboxBackend
 
 
 class ScriptedToolClient:
@@ -38,10 +39,31 @@ class ScriptedToolClient:
         )
 
 
+class ScriptedBackend(MemorySandboxBackend):
+    def __init__(self, tools):
+        super().__init__()
+        self.tools = tools
+
+    def resolve_path(self, sandbox, *, path, cwd=None, kind="any"):
+        from pathlib import PurePosixPath
+        return str(PurePosixPath("/") / (cwd or ".") / path)
+
+    def start_process(self, sandbox, *, session_id, command, cwd, tty):
+        result = self.tools.exec_solver(None, command)
+        return BackendProcessHandle(session_id, result)
+
+    def poll_process(self, sandbox, handle, *, wait_ms=0):
+        r = handle.raw
+        return BackendProcessSnapshot('completed' if r.exit_code == 0 else 'failed', r.stdout, r.exit_code, stdin_open=False)
+
+
 class FakeTools:
     def __init__(self) -> None:
         self.commands: list[str] = []
         self.patch_number = 0
+
+    def backend_for_workspace(self, workspace):
+        return ScriptedBackend(self)
 
     def exec_solver(self, workspace, command, *, timeout=120):
         self.commands.append(command)

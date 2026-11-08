@@ -10,6 +10,7 @@ from mac_bench.runtime.llm.client import ChatMessage, ChatResponse
 from mac_bench.runtime.agents.workflow import AgentBudget
 from mac_bench.evaluation import run_episode,task_record,open_task
 from mac_bench.environments.packaging.bundle import seal_bundle
+from mac_bench.environments.packaging.interface import business_guide
 from mac_bench.runtime.sandbox.base import CommandResult
 from mac_bench.baselines.aorchestra.tasks import AOrchestra
 from mac_bench.baselines.meta_team.tasks import MetaTeam
@@ -57,6 +58,7 @@ def handle(tmp_path,domain,task_id='sample'):
     else:
         meta={'scenario_family':'service_administration','tool_api_version':2};owner=NativeOwner()
         (root/'private/initial.json').write_text('{"writes":0}')
+        (root/'private/agent_instructions.txt').write_text(business_guide(root))
     b=seal_bundle(root,world_id=task_id,public_files=['public/task.txt'],metadata=meta)
     h=open_task(task_record(b.root),tmp_path/'runtime',**({'world':owner} if domain=='engineering' else {'owner':owner}))
     return h,owner
@@ -103,6 +105,9 @@ def scripted(method,domain):
 @pytest.mark.parametrize('method',['aorchestra','meta_team'])
 def test_original_methods_reach_both_task_families(tmp_path,method,domain):
     task,owner=handle(tmp_path,domain);baseline,client=scripted(method,domain)
+    # The real model client imports LiteLLM before running the adapter. Its
+    # first import initializes TIKTOKEN_CACHE_DIR; measure adapter changes only.
+    import litellm
     before=dict(os.environ);cwd=Path.cwd()
     # CLI callers commonly use relative output paths; native methods change cwd.
     result=run_episode(task,baseline,client,output=Path(os.path.relpath(tmp_path/'episode')),
@@ -148,7 +153,7 @@ def test_budget_stops_native_loops_without_hidden_extra_calls(tmp_path,method):
 @pytest.mark.parametrize('method',['aorchestra','meta_team'])
 def test_provider_failure_after_write_retains_final_state(tmp_path,method):
     task,owner=handle(tmp_path,'engineering');baseline,client=scripted(method,'engineering')
-    prefix={'aorchestra':2,'meta_team':1,'agentnet':3}[method]
+    prefix={'aorchestra':2,'meta_team':1}[method]
     values=list(client.values)[:prefix]+[RuntimeError('scripted provider failure')]
     client=Script(values)
     result=run_episode(task,baseline,client,output=tmp_path/'episode',
@@ -522,12 +527,6 @@ def test_magentic_one_stops_after_write_without_losing_partial_state(tmp_path,fa
     assert result['agents_active_at_return']==0
     if failure=='budget':assert result['stop_reason']=='budget:model_calls'
     else:assert result['status']=='error' and result['error_type']=='RuntimeError'
-
-
-def test_agentnet_is_not_an_active_experiment_method():
-    from mac_bench.baselines.common.registry import create_method
-    with pytest.raises(ValueError,match='Unknown collaboration method'):
-        create_method('agentnet')
 
 
 @pytest.mark.parametrize('domain',['engineering','operational'])

@@ -3,7 +3,7 @@
 Install the development dependencies and run the local suite:
 
 ```bash
-sudo apt-get install ripgrep
+sudo apt-get install ripgrep nodejs
 pip install -e '.[dev,agents]'
 pytest
 ```
@@ -27,7 +27,7 @@ Install the task data as described in [Getting started](../docs/getting-started.
 pytest tests/tasks
 ```
 
-These checks also run with ordinary `pytest` when the data is installed. A code-only checkout reports them as skipped. `MAC_BENCH_TASK_ROOT` can point to another installed `tasks/` directory. For browser checks, install Playwright and Chromium:
+These checks also run with ordinary `pytest` when the data is installed. Business contract tests use the installed finance task’s application catalog. A code-only checkout reports them as skipped. `MAC_BENCH_TASK_ROOT` can point to another installed `tasks/` directory. For browser checks, install Playwright and Chromium:
 
 ```bash
 pip install playwright
@@ -47,3 +47,17 @@ pytest --run-baselines
 ```
 
 This adds tests of the original orchestration loops, worker messaging and interruption handling. Model responses remain scripted. Use `pytest --run-baselines -m baselines` to run only this group.
+
+## Superagent integration
+
+With Node.js 24 or newer and pnpm 11.7.0 installed:
+
+```bash
+pip install -e '.[dev,agents,superagent]'
+pnpm --dir src/mac_bench/baselines/superagent install --frozen-lockfile
+pnpm --dir src/mac_bench/baselines/superagent typecheck
+pnpm --dir src/mac_bench/baselines/superagent test
+pytest --run-superagent -m superagent
+```
+
+These tests exercise the native router, workers, delegation, model relay and shared workspace using scripted model responses.

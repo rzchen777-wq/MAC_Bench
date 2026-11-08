@@ -5,6 +5,10 @@ from threading import Condition
 from jsonschema import Draft202012Validator, ValidationError
 
 
+class AgentAccessClosed(RuntimeError):
+    """The call was not admitted because this episode has ended."""
+
+
 class AgentEnvironment:
     def __init__(self, definitions, dispatch):
         self.__dispatch = dispatch
@@ -36,7 +40,7 @@ class AgentEnvironment:
         from ..episodes.identity import call_identity
         with self.__condition:
             if not self.__active:
-                raise RuntimeError('Agent access is closed')
+                raise AgentAccessClosed('Agent access is closed')
             self.__admit()
             self.__inflight += 1
         try:
@@ -64,7 +68,7 @@ class AgentEnvironment:
             self.__event({'kind': 'task_tool_end', 'tool': name, 'result': result, **call_identity()})
             return result
         except BaseException as exc:
-            self.__event({'kind': 'task_tool_error', 'tool': name, 'error_type': type(exc).__name__})
+            self.__event({'kind': 'task_tool_error', 'tool': name, **call_identity(), 'error_type': type(exc).__name__})
             raise
         finally:
             with self.__condition:

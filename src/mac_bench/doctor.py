@@ -13,9 +13,12 @@ def main(argv=None):
     checks = [('Python >= 3.11', sys.version_info >= (3,11)),
               ('Task index', (root/'data/public_tasks.json').is_file())]
     if args.task_id:
-        from mac_bench.evaluation.tasks.catalog import load_catalog
         try:
-            load_catalog(root/'data/tasks.json',task_ids=[args.task_id])
+            from mac_bench.data_cli import catalog_rows, verify_task, verify_environment_assets
+            _, rows = catalog_rows(root, [args.task_id])
+            for row in rows:
+                verify_task(root / 'data' / row['bundle'], row)
+                verify_environment_assets(root, row, checksums=False)
             checks.append(('Selected task assets', True))
         except (OSError, ValueError) as exc:
             checks.append(('Selected task assets: '+str(exc), False))

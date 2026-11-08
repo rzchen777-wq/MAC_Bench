@@ -1,1 +1,1 @@
-"""apps / pretix components for Stage III."""
+"""apps / pretix environment components."""

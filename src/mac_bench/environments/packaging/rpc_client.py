@@ -3,7 +3,12 @@ import base64
 import gzip
 import json
 import sys
-from urllib.request import Request, urlopen
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock, BoundedSemaphore
+from urllib.request import Request, build_opener, ProxyHandler
+
+# This relay talks only to the private loopback service, never an HTTP proxy.
+urlopen = build_opener(ProxyHandler({})).open
 
 
 def exchange(request):
@@ -21,14 +26,24 @@ def exchange(request):
 
 
 def main():
-    for line in sys.stdin:
-        request = json.loads(line)
+    output_lock = Lock()
+    slots = BoundedSemaphore(32)
+    def run(request):
         try:
-            response = {"id": request["id"], "response": exchange(request)}
-        except Exception as exc:
-            # A transport error must not trigger a replay of a possible write.
-            response = {"id": request["id"], "transport_error": type(exc).__name__}
-        print(json.dumps(response, ensure_ascii=True, allow_nan=False), flush=True)
+            try:
+                response = {"id": request["id"], "response": exchange(request)}
+            except Exception as exc:
+                # A transport error must not trigger a replay of a possible write.
+                response = {"id": request["id"], "transport_error": type(exc).__name__}
+            with output_lock:
+                print(json.dumps(response, ensure_ascii=True, allow_nan=False), flush=True)
+        finally:
+            slots.release()
+    with ThreadPoolExecutor(max_workers=16, thread_name_prefix='world-rpc') as pool:
+        for line in sys.stdin:
+            request = json.loads(line)
+            slots.acquire()
+            pool.submit(run, request)
 
 
 if __name__ == "__main__":

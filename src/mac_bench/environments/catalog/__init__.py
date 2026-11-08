@@ -1,1 +1,1 @@
-"""catalog components for Stage III."""
+"""catalog environment components."""

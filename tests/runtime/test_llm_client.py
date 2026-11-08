@@ -188,6 +188,32 @@ class LLMClientTest(unittest.TestCase):
             )
         )
 
+    def test_openrouter_request_preserves_model_namespace(self) -> None:
+        import json
+        import httpx
+        import litellm
+        from litellm.llms.custom_httpx.http_handler import HTTPHandler
+
+        def respond(request):
+            self.assertEqual("https://openrouter.ai/api/v1/chat/completions", str(request.url))
+            body = json.loads(request.content)
+            self.assertEqual("openai/gpt-6-luna", body["model"])
+            self.assertEqual({"effort": "none"}, body["reasoning"])
+            return httpx.Response(200, json={
+                "id": "gateway-test", "object": "chat.completion", "created": 1,
+                "model": body["model"],
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "OK"},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}})
+
+        with httpx.Client(transport=httpx.MockTransport(respond)) as transport:
+            client = LiteLLMChatClient(LLMConfig(
+                base_url="https://openrouter.ai/api/v1", api_key="test-token",
+                model="openai/gpt-6-luna", thinking_mode="disabled", max_retries=0),
+                publish_env=False, http_client=HTTPHandler(client=transport))
+            response = client.complete([ChatMessage("user", "Reply OK")], max_tokens=8)
+        self.assertEqual("OK", response.content)
+
     def test_client_syncs_thinking_mode_to_gateway_env(self) -> None:
         from mac_bench.runtime.llm.gateway import apply_gateway_env
 
@@ -202,6 +228,9 @@ class LLMClientTest(unittest.TestCase):
             environ=env,
         )
         self.assertEqual("enabled", env["MAC_BENCH_LLM_THINKING"])
+        self.assertNotIn("DEV_API_BASE", env)
+        self.assertNotIn("DEV_API_KEY", env)
+        self.assertNotIn("LLM_PROVIDER", env)
 
     @patch("mac_bench.runtime.llm.client.gateway_complete")
     def test_length_finish_with_reasoning_raises_truncation_error(self, complete) -> None:

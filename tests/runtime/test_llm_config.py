@@ -30,6 +30,23 @@ class LLMConfigTest(unittest.TestCase):
         self.assertNotIn("top-secret", repr(config))
         self.assertNotIn("ignored-secret", repr(config))
 
+    def test_unrelated_baseline_variables_do_not_select_the_connection(self) -> None:
+        env = {
+            "DEV_API_BASE": "https://unrelated.example/v1",
+            "DEV_API_KEY": "unrelated-key",
+            "META_TEAM_MODEL": "unrelated-model",
+            "OPENAI_BASE_URL": "https://selected.example/v1",
+            "OPENAI_API_KEY": "selected-key",
+            "OPENAI_MODEL": "selected-model",
+        }
+        config = LLMConfig.from_env(env, require_api_key=True)
+        self.assertEqual("https://selected.example/v1", config.base_url)
+        self.assertEqual("selected-key", config.api_key)
+        self.assertEqual("selected-model", config.model)
+        with self.assertRaisesRegex(RuntimeError, "No LLM API key configured"):
+            LLMConfig.from_env({key: value for key, value in env.items()
+                               if not key.startswith("OPENAI_")}, require_api_key=True)
+
     def test_dry_configuration_can_omit_key(self) -> None:
         config = LLMConfig.from_env(
             {"MAC_BENCH_LLM_MODEL": "fake-model"}, require_api_key=False

@@ -1,1 +1,1 @@
-"""apps components for Stage III."""
+"""apps environment components."""

@@ -6,7 +6,7 @@ An evaluation episode starts from a task's initial state, runs the selected syst
 
 ## Run the included baselines
 
-Complete [installation and model configuration](getting-started.md) first. ReAct is included with the `agents` extra. The multi-agent adapters load their upstream implementations using the pinned commits in [upstream.json](../configs/baselines/upstream.json).
+Complete [installation and model configuration](getting-started.md) first. ReAct is included with the `agents` extra. AOrchestra, Meta-Team and Magentic-One use the pinned checkouts in [upstream.json](../configs/baselines/upstream.json). Superagent uses the DeepSeek Harness packages specified in its pnpm lockfile.
 
 | System | `--method` | Upstream checkout name | Additional extra |
 | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ Complete [installation and model configuration](getting-started.md) first. ReAct
 | AOrchestra | `aorchestra` | `AOrchestra` | `aorchestra` |
 | Magentic-One | `magentic_one` | `Magentic-One` | `magentic_one` |
 | Meta-Team | `meta_team` | `Meta-Team` | `meta_team` |
+| Superagent | `superagent` | npm packages | `superagent` |
 
 For example, install and run Meta-Team:
 
@@ -29,6 +30,57 @@ mac-bench evaluate \
 ```
 
 Downloaded sources live in `.cache/baselines/`. Method settings are in [configs/baselines](../configs/baselines); pass a modified file with `--method-config path/to/config.yaml`.
+
+## Run Superagent
+
+Superagent routes the task to persistent workers. Workers share the task environment and can delegate to subagents; each agent keeps its own conversation history.
+
+Install [Node.js 24 or newer](https://nodejs.org/) and pnpm 11.7.0, then run from the checkout root:
+
+```bash
+pip install -e '.[modal,agents,superagent]'
+npm install --global pnpm@11.7.0
+pnpm --dir src/mac_bench/baselines/superagent install --frozen-lockfile
+```
+
+Configure `MAC_BENCH_LLM_BASE_URL`, `MAC_BENCH_LLM_API_KEY` and `MAC_BENCH_LLM_MODEL` in `.env`. For DeepSeek, use `https://api.deepseek.com` and `deepseek-v4-flash`. Run one development task:
+
+```bash
+mac-bench evaluate \
+  --task-id op26_service_administration_007 \
+  --method superagent --repetitions 1 \
+  --max-tokens 1000000 --max-model-calls 3000 \
+  --max-tool-calls 9000 --max-seconds 7200 \
+  --out outputs/preschool-superagent
+```
+
+For GPT-6-Luna through OpenRouter, set `OPENROUTER_API_KEY` and add
+`--method-config configs/baselines/superagent_luna.yaml`. This connection uses LiteLLM.
+Both configurations disable thinking. Router, workers, subagents and context summaries share the model and episode budget.
+To use an HTTP proxy, add `model_transport: {proxy: "http://host:port"}` to your configuration.
+
+The optional Docker target includes Node and DSH:
+
+```bash
+docker build --target superagent -f docker/Dockerfile -t mac-bench:superagent .
+```
+
+The [Docker guide](../docker/README.md#run-superagent) gives the run command with dataset, cache and output mounts.
+
+## Paper evaluation
+
+The main comparison uses all 48 test tasks, with eight tasks per category and one run per system and backbone. Thinking is disabled. Each run has a two-hour execution limit and a task-specific budget of 5M, 10M or 15M input-plus-output tokens, shared across the whole system. The corresponding model-call ceilings are 1,000, 2,000 and 3,000; tool-call ceilings are 3,000, 6,000 and 9,000. The [task budget file](../configs/evaluation/task_budgets.json) lists the exact limits.
+
+The commands above are single-task examples. For the paper configuration on the first finance test task:
+
+```bash
+mac-bench evaluate \
+  --task-id op26_business_finance_001 \
+  --method superagent --repetitions 1 \
+  --max-tokens 15000000 --max-model-calls 3000 \
+  --max-tool-calls 9000 --max-seconds 7200 \
+  --out outputs/finance-superagent
+```
 
 ## Choose the run budget
 

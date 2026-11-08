@@ -23,17 +23,17 @@ class EmbeddingConfig:
             load_dotenv()
         env = os.environ if environ is None else environ
         m = dict(mapping or {})
-        base = (_resolve_env_ref(m.get('base_url'), env) or env.get('EVOTEAM_EMBEDDING_BASE_URL')
+        base = (_resolve_env_ref(m.get('base_url'), env) or env.get('MAC_BENCH_EMBEDDING_BASE_URL')
                 or 'https://api.openai.com/v1').rstrip('/')
         model = (_resolve_env_ref(m.get('model_name') or m.get('model'), env)
-                 or env.get('EVOTEAM_EMBEDDING_MODEL') or '')
+                 or env.get('MAC_BENCH_EMBEDDING_MODEL') or '')
         key = (_resolve_env_ref(m.get('api_key'), env)
-               or env.get(str(m.get('api_key_env') or 'EVOTEAM_EMBEDDING_API_KEY')))
+               or env.get(str(m.get('api_key_env') or 'MAC_BENCH_EMBEDDING_API_KEY')))
         timeout = float(m.get('timeout_seconds', 120))
         batch = int(m.get('batch_size', 32))
         dims = m.get('dimensions')
         if not base.startswith(('http://', 'https://')) or not model:
-            raise ValueError('Set embedding.base_url and embedding.model_name (or EVOTEAM_EMBEDDING_* variables)')
+            raise ValueError('Set embedding.base_url and embedding.model_name (or MAC_BENCH_EMBEDDING_* variables)')
         if timeout <= 0 or batch <= 0 or (dims is not None and (type(dims) is not int or dims <= 0)):
             raise ValueError('Embedding timeout, batch_size and optional dimensions must be positive')
         return cls(base, model, key, timeout, batch, dims, str(m.get('query_instruction') or ''))

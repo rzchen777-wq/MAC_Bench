@@ -2,6 +2,7 @@
 import argparse
 from pathlib import Path
 import json
+import signal
 from mac_bench.runtime.agents.workflow import AgentBudget
 from mac_bench.runtime.common.artifacts import write_json
 from .tasks import task_record, open_task, load_catalog, CATEGORIES
@@ -11,6 +12,18 @@ from mac_bench.runtime.paths import artifact_root
 
 
 def main(argv=None):
+    # Convert process termination into an exception so the episode's existing
+    # finally blocks can stop agents, save results and close remote sandboxes.
+    def terminate(signum, frame):
+        raise SystemExit(128 + signum)
+    previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        return _main(argv)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group()
     source.add_argument('--world', type=Path)
@@ -31,7 +44,7 @@ def main(argv=None):
                         help='Persistent completed episodes; shared across experiment output directories')
     parser.add_argument('--cache-namespace', default='main',
                         help='Non-secret experiment/account isolation; keep fixed when resuming')
-    parser.add_argument('--method', choices=['react_single','aorchestra','meta_team','magentic_one'], default='react_single')
+    parser.add_argument('--method', choices=['react_single','aorchestra','meta_team','magentic_one','superagent'], default='react_single')
     parser.add_argument('--method-config', type=Path)
     parser.add_argument('--repetitions', type=int)
     parser.add_argument('--max-model-calls', type=int)
@@ -39,7 +52,6 @@ def main(argv=None):
     parser.add_argument('--max-tokens', type=int)
     parser.add_argument('--max-seconds', type=int)
     args = parser.parse_args(argv)
-    requested_repetitions = args.repetitions
     if args.repetitions is None:
         args.repetitions = 2
     if not args.reuse_completed:
@@ -47,7 +59,6 @@ def main(argv=None):
         os.environ['MAC_BENCH_LLM_CACHE'] = '0'
     if args.repetitions < 1:
         parser.error('repetitions must be positive')
-    frozen_budget = {}
     if args.world:
         if args.task_id:
             parser.error('--task-id selects from a catalogue')
@@ -60,10 +71,10 @@ def main(argv=None):
         record = load_catalog(args.catalog, task_ids=[args.task_id])[0]
         if args.category and args.category != record.category:
             parser.error('--category conflicts with catalogue')
-    for field, previous_default in (('max_model_calls', 80), ('max_tool_calls', 160),
+    for field, default in (('max_model_calls', 80), ('max_tool_calls', 160),
                                      ('max_tokens', 400000), ('max_seconds', 2400)):
         if getattr(args, field) is None:
-            setattr(args, field, frozen_budget.get(field, previous_default))
+            setattr(args, field, default)
     if args.cache_dir is None:
         args.cache_dir = artifact_root() / 'cache/completed_episodes'
     if args.dry_run:
@@ -155,6 +166,8 @@ def main(argv=None):
         report['closed'] = bool(report['episodes']) and all(e.get('closed') for e in report['episodes'])
         report['reused_episodes'] = sum(e['cache']['reused'] for e in report['episodes'])
         write_json(report, args.out / 'summary.json')
+        if client is not None and hasattr(client, 'close'):
+            client.close()
     return 0 if report['status'] == 'completed' else 1
 
 

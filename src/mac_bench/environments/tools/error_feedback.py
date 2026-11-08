@@ -1,5 +1,6 @@
-"""Recover safe field-specific guidance, not native tracebacks or input values."""
+"""Expose business rejection reasons and record locators without server internals."""
 
+from html import unescape
 import json
 import re
 
@@ -19,6 +20,160 @@ RULES = {
 
 FILTER_OPERATORS = frozenset(('eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is',
                              'like', 'ilike', 'startsWith', 'endsWith', 'regex', 'iregex'))
+
+# Bigcapital CreditNotes / CreditNotesApplyInvoice / PaymentReceived validators.
+# Interpret the stable service code, never an arbitrary error message or stack.
+CREDIT_ERRORS = {
+    'EXPENSE_HAS_ASSOCIATED_LANDED_COST': (
+        'id', 'invalid_state', 'This expense is referenced by an allocated landed cost and cannot be deleted.',
+        'Keep the expense while the allocation exists; deletion requires removing that allocation first.'),
+    'BILL_ENTRIES_IDS_NOT_FOUND': (
+        'billId', 'invalid_reference', 'One or more bills could not be found for this vendor.',
+        'Check the bill IDs and vendor IDs on the bills and vendor credit.'),
+    'BILLS_NOT_OPENED_YET': (
+        'billId', 'invalid_state', 'One or more selected bills have not been opened.',
+        'Read the bill lifecycle state before applying vendor credit.'),
+    'BILLS_HAS_NO_REMAINING_AMOUNT': (
+        'amount', 'insufficient_balance', 'The requested credit exceeds the outstanding amount on one or more bills.',
+        'Use each bill\'s current due_amount as the upper limit for its additional allocation.'),
+    'VENDOR_CREDIT_HAS_NO_REMAINING_AMOUNT': (
+        'amount', 'insufficient_balance', 'The requested amount exceeds the vendor credit\'s remaining unused credit.',
+        'Read credits_remaining and existing bill allocations before choosing additional amounts.'),
+    'CREDIT_NOTE_APPLY_TO_INVOICES_NOT_FOUND': (
+        'creditNoteAppliedInvoiceId', 'invalid_reference',
+        'The selected customer credit allocation does not exist or has already been removed.',
+        'List appliedCreditNoteToInvoices for the credit note and use the allocation row id, not the invoice or credit note id.'),
+    'VENDOR_CREDIT_APPLY_TO_BILLS_NOT_FOUND': (
+        'vendorCreditAppliedBillId', 'invalid_reference',
+        'The selected vendor credit allocation does not exist or has already been removed.',
+        'List getAppliedBillsToVendorCredit and use the allocation row id. Customer credit allocations use deleteAppliedInvoiceToCreditNote.'),
+    'INVOICES_HAS_NO_REMAINING_AMOUNT': (
+        'amount', 'insufficient_balance',
+        'The requested credit exceeds the outstanding amount on one or more invoices.',
+        'Read the selected invoices and their payment/credit allocations. Apply credit only up to '
+        'the outstanding amount; applying credit and refunding a received payment are different operations.'),
+    'CREDIT_NOTE_HAS_NO_REMAINING_AMOUNT': (
+        'amount', 'insufficient_balance',
+        'The requested amount exceeds the credit note\'s remaining unused credit.',
+        'Read the credit note, existing invoice applications and refunds before choosing the amount.'),
+    'INVOICES_IDS_NOT_FOUND': (
+        'invoiceId', 'invalid_reference',
+        'One or more invoices could not be found for this customer.',
+        'Check the invoice IDs and customer IDs on both the invoices and the credit/payment document.'),
+    'INVOICES_NOT_DELIVERED_YET': (
+        'invoiceId', 'invalid_state',
+        'One or more selected invoices have not been marked as delivered.',
+        'Read each invoice\'s current lifecycle state and the available lifecycle operations.'),
+    'CREDIT_NOTE_NOT_FOUND': (
+        'creditNoteId', 'invalid_reference', 'The selected credit note does not exist.',
+        'Find the existing credit note and use its returned native ID.'),
+    'CREDIT_NOTE_AMOUNT_SMALLER_THAN_USED': (
+        'amount', 'insufficient_balance',
+        'The new credit amount is below the amount already applied or refunded.',
+        'Read the existing applications and refunds before editing this credit note.'),
+    'CREDIT_NOTE_CUSTOMER_HAS_SETTLEMENTS': (
+        'customerId', 'invalid_state',
+        'A credit note with applied or refunded credits cannot change customer.',
+        'Keep its original customer and inspect the existing applications and refunds.'),
+    'VENDOR_CREDIT_AMOUNT_SMALLER_THAN_USED': (
+        'amount', 'insufficient_balance',
+        'The new credit amount is below credits already applied or refunded.',
+        'Read the vendor credit and its allocations/refunds before editing.'),
+    'VENDOR_CREDIT_VENDOR_HAS_SETTLEMENTS': (
+        'vendorId', 'invalid_state',
+        'A settled vendor credit cannot change vendor.',
+        'Keep the original vendor and inspect existing settlements.'),
+    'INVOICE_AMOUNT_SMALLER_THAN_SETTLED': (
+        'entries', 'insufficient_balance',
+        'The invoice total is below its payments, credits and write-offs.',
+        'Read the invoice and retain its existing settlements when editing.'),
+    'INVOICE_CUSTOMER_HAS_SETTLEMENTS': (
+        'customerId', 'invalid_state',
+        'A settled invoice cannot change customer.',
+        'Keep the original customer and inspect existing settlements.'),
+    'BILL_AMOUNT_SMALLER_THAN_SETTLED': (
+        'entries', 'insufficient_balance',
+        'The bill total is below its payments and applied credits.',
+        'Read the bill and retain its existing settlements when editing.'),
+    'BILL_VENDOR_HAS_SETTLEMENTS': (
+        'vendorId', 'invalid_state',
+        'A settled bill cannot change vendor.',
+        'Keep the original vendor and inspect existing settlements.'),
+    'INVALID_VENDOR_CREDIT_ALLOCATION': (
+        'entries', 'invalid_value',
+        'Allocations need distinct positive bill IDs and positive amounts.',
+        'Use one entry per bill and read each bill balance before allocating.'),
+    'VENDOR_CREDIT_HAS_NO_CREDITS_REMAINING': (
+        'amount', 'insufficient_balance',
+        'The refund exceeds the vendor credit remaining balance.',
+        'Read the vendor credit and its existing refunds and allocations.'),
+    'CREDIT_NOTE_ALREADY_OPENED': (
+        'creditNoteId', 'invalid_state', 'This credit note is already open.',
+        'Read its current state instead of repeating the open operation.'),
+}
+
+
+def business_rejection(payload, tool, status):
+    """Recognize public business errors; preserve the facts needed to correct them."""
+    if not isinstance(payload, dict):
+        return None
+    application = getattr(tool, 'application', None)
+    if application == 'pretix':
+        from .adapters.pretix_actions import state_rejection
+        if result := state_rejection(tool, payload, status):
+            return result
+    if application == 'bigcapital' and isinstance(payload.get('errors'), list):
+        for error in payload['errors'][:30]:
+            kind = error.get('type') if isinstance(error, dict) else None
+            if isinstance(kind, str) and kind in CREDIT_ERRORS:
+                field, rule, message, guidance = CREDIT_ERRORS[kind]
+                return {'code': 'native_business_rule_rejected', 'http_status': status,
+                        'native_error_type': kind,
+                        'field_errors': [{'field': field, 'rule': rule}],
+                        'message': message,
+                        'retry_guidance': guidance + ' Read current state before retrying a write.'}
+    if application != 'hrms':
+        return None
+
+    # Frappe's _server_messages is a JSON list of JSON-encoded message objects.
+    # Read only that user-facing channel, not `exc`, headers, or SQL diagnostics.
+    def messages(value, depth=0):
+        if depth > 5:
+            return
+        if isinstance(value, dict):
+            for key in ('_server_messages', 'message'):
+                if key in value:
+                    yield from messages(value[key], depth + 1)
+        elif isinstance(value, list):
+            for child in value[:12]:
+                yield from messages(child, depth + 1)
+        elif isinstance(value, str) and len(value) <= 8000:
+            if value.startswith(('[', '{', '"')):
+                try:
+                    yield from messages(json.loads(value), depth + 1)
+                    return
+                except ValueError:
+                    pass
+            yield ' '.join(unescape(re.sub(r'<[^>]*>', '', value)).split())
+
+    for message in messages(payload):
+        match = re.fullmatch(
+            r'Employee (.{1,160}?) already has an active Shift (.{1,160}?): '
+            r'([A-Za-z0-9_./-]{1,160}) that overlaps within this period\.', message)
+        if match:
+            employee, shift_type, record = match.groups()
+            return {'code': 'native_shift_overlap', 'http_status': status,
+                    'native_error_type': 'OverlappingShiftError',
+                    'field_errors': [{'field': 'employee', 'rule': 'conflict'}],
+                    'conflict': {'employee': employee, 'shift_type': shift_type,
+                                 'doctype': 'Shift Assignment', 'name': record},
+                    'message': f'Employee {employee} already has an active overlapping shift '
+                               f'{record} ({shift_type}).',
+                    'retry_guidance': 'Read the conflicting Shift Assignment and both Shift Types '
+                                      'to compare dates and daily start/end times. Reuse an existing '
+                                      'assignment when it represents the same duty; otherwise plan '
+                                      'non-overlapping work. Changing request_id does not remove the conflict.'}
+    return None
 
 
 def filter_restriction(payload, fields):
@@ -49,6 +204,12 @@ def feedback(exc, tool):
     if not isinstance(exc, (NativeHTTPFailure, NativeGraphQLFailure)):
         return None
     payload = exc.native_payload if isinstance(exc, NativeHTTPFailure) else {'errors': exc.native_errors}
+    if detail := business_rejection(payload, tool, getattr(exc, 'status', None)):
+        if isinstance(exc, NativeHTTPFailure) and exc.outcome == 'not_started':
+            detail['message'] += ' No changes were made by this request.'
+            detail['retry_guidance'] = detail['retry_guidance'].removesuffix(
+                ' Read current state before retrying a write.')
+        return detail
     # This is a fixed native business error identifier, not arbitrary server
     # text or submitted values. Hiding it makes a recoverable item prerequisite
     # indistinguishable from malformed JSON or an invalid financial document.

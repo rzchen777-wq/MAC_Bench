@@ -113,7 +113,7 @@ def package(source, initial, identities, sources, extraction, compiled, gaps, *,
 
 def verify_package(contract):
     if contract.get('format') != 'business-verifier/sql-v4':
-        raise VerificationError('Unsupported verifier format; regenerate legacy packages with explicit business goals')
+        raise VerificationError('Unsupported verifier format; expected explicit business goals')
     if digest({k:v for k,v in contract.items() if k != 'revision'}) != contract.get('revision'):
         raise VerificationError('Verifier package integrity mismatch')
     validate_extraction(contract['requirements'], contract['source'])

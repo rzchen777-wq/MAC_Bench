@@ -2,6 +2,7 @@
 from copy import deepcopy
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import subprocess
 import yaml
@@ -32,16 +33,29 @@ def model_connection(method):
 
 def model_client(method):
     from mac_bench.runtime.llm.client import LiteLLMChatClient
-    return LiteLLMChatClient(model_connection(method), publish_env=False)
+    connection = model_connection(method)
+    proxy = getattr(method, 'spec', {}).get('model_transport', {}).get('proxy')
+    if proxy:
+        import httpx
+        from litellm.llms.custom_httpx.http_handler import HTTPHandler
+        transport = HTTPHandler(client=httpx.Client(
+            proxy=proxy, trust_env=False, timeout=connection.timeout_seconds))
+        return LiteLLMChatClient(connection, publish_env=False, http_client=transport)
+    return LiteLLMChatClient(connection, publish_env=False)
 
 
 def tree_hash(root):
     root = Path(root)
     if not root.is_dir():
         raise FileNotFoundError(root)
-    files = {str(p.relative_to(root)): sha256(p.read_bytes()).hexdigest()
-             for p in sorted(root.rglob('*')) if p.is_file() and not
-             set(p.relative_to(root).parts).intersection({'.git','__pycache__','sessions','runs','save'})}
+    excluded = {'.git', '__pycache__', 'sessions', 'runs', 'save', 'node_modules'}
+    files = {}
+    for directory, directories, names in os.walk(root):
+        directories[:] = [name for name in directories if name not in excluded]
+        for name in names:
+            path = Path(directory) / name
+            if name not in excluded and path.is_file():
+                files[str(path.relative_to(root))] = sha256(path.read_bytes()).hexdigest()
     return sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 

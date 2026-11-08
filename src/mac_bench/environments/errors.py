@@ -19,6 +19,8 @@ class NativeHTTPFailure(CompileFailure):
         super().__init__(f'REST_http_error:{method}:{status}')
         self.status = status
         self.native_payload = payload
+        # Application adapters may establish a known pre-write rejection.
+        self.outcome = 'unknown'
 
 
 class NativeGraphQLFailure(CompileFailure):

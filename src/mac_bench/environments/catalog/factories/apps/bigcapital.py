@@ -220,7 +220,8 @@ class BigCapitalAdapter(NativeAdapter):
     def create(self, payload, parents):
         scope = payload.get('scope', {})
         response = self.transport.request_response(self.recipe['create_method'],
-            render(self.recipe['create_path'], scope), payload['values'])
+            render(self.recipe['create_path'], scope), payload['values'],
+            rate_limit_key=self.recipe['create_path'])
         if response.status == 202:
             raise PendingAccountingOperation(response)
         if self.recipe['empty_create']:
@@ -241,7 +242,8 @@ class BigCapitalAdapter(NativeAdapter):
         arguments = {**scope}
         if self.recipe['identity_parameter']:
             arguments[self.recipe['identity_parameter']] = identity[self.recipe['identity_fields'][0]]
-        record = self.transport.request('GET', render(self.recipe['read_path'], arguments))
+        record = self.transport.request('GET', render(self.recipe['read_path'], arguments),
+                                        rate_limit_key=self.recipe['read_path'])
         for key in self.recipe['record_pointer']:
             record = record[key]
         if self.recipe['list_read']:

@@ -1,1 +1,1 @@
-"""runtime components for Stage III."""
+"""Shared application runtime components."""

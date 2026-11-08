@@ -1,0 +1,338 @@
+{
+  "black_formatter": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "build_release": {
+    "max_tokens": 5000000,
+    "max_model_calls": 1000,
+    "max_tool_calls": 3000,
+    "max_env_actions": 3000,
+    "max_seconds": 7200
+  },
+  "cattrs_conversion": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "changedetection_monitoring": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "datamodel_jsonschema": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "freshrss_labels": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "graphql_execution": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "hatchling_packages": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "healthchecks_monitoring": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "helpdesk_tickets": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "installer_wheels": {
+    "max_tokens": 5000000,
+    "max_model_calls": 1000,
+    "max_tool_calls": 3000,
+    "max_env_actions": 3000,
+    "max_seconds": 7200
+  },
+  "isort_imports": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "jinja_templates": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "kanboard_project_roles": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "lark_engine": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "linkding_bookmarks": {
+    "max_tokens": 5000000,
+    "max_model_calls": 1000,
+    "max_tool_calls": 3000,
+    "max_env_actions": 3000,
+    "max_seconds": 7200
+  },
+  "mealie_households": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "mistune_markdown": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "navidrome_multilibrary": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "networkx_routing": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_001": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_003": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_004": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_005": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_006": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_007": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_008": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_business_finance_009": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_002": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_003": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_004": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_005": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_006": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_007": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_project_content_operations_008": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_001": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_002": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_003": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_004": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_005": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_006": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_008": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op26_service_administration_009": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "op_project_content_operations_002": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "packaging_standards": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  },
+  "rdflib_datasets": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "sqlglot_optimizer": {
+    "max_tokens": 15000000,
+    "max_model_calls": 3000,
+    "max_tool_calls": 9000,
+    "max_env_actions": 9000,
+    "max_seconds": 7200
+  },
+  "virtualenv_environments": {
+    "max_tokens": 10000000,
+    "max_model_calls": 2000,
+    "max_tool_calls": 6000,
+    "max_env_actions": 6000,
+    "max_seconds": 7200
+  }
+}

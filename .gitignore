@@ -14,3 +14,6 @@ data/tasks/
 data/environments/
 
 HF_token
+
+**/node_modules/
+**/.pnpm-store/

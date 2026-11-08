@@ -61,3 +61,21 @@ def test_oci_selection_only_requires_selected_application(tmp_path):
     assert len(index["manifests"]) == 1 and len(paths) == 3
     with pytest.raises(ValueError, match="missing"):
         selected_images(tmp_path, {"no-such-app"})
+
+
+@pytest.mark.parametrize('cross_device', [False, True])
+def test_release_blob_export_preserves_bytes_on_same_or_other_filesystem(tmp_path, monkeypatch, cross_device):
+    import errno
+    import importlib.util
+    from mac_bench.runtime.paths import repository_root
+    path = repository_root()/'scripts/prepare_dataset.py'
+    spec = importlib.util.spec_from_file_location('prepare_dataset_test', path)
+    module = importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    source, target = tmp_path/'source', tmp_path/'target'
+    source.write_bytes(bytes(range(256))*4000)
+    if cross_device:
+        def fail(*args):raise OSError(errno.EXDEV, 'different filesystem')
+        monkeypatch.setattr(module.os, 'link', fail)
+    module.link_or_copy(source, target)
+    assert target.read_bytes() == source.read_bytes()
+    if not cross_device:assert target.stat().st_ino == source.stat().st_ino

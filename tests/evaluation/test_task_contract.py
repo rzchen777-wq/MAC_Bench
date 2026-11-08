@@ -7,6 +7,7 @@ from mac_bench.evaluation.tasks import (
     AgentEnvironment, ToolDefinition, task_record, load_catalog, open_task,
 )
 from mac_bench.environments.packaging.bundle import seal_bundle
+from mac_bench.environments.packaging.interface import business_guide
 from mac_bench.runtime.sandbox.base import CommandResult
 
 
@@ -16,6 +17,8 @@ def bundle(tmp_path, category, name='task'):
     (root/'private/secret.txt').write_text('PRIVATE ANSWER')
     meta={'world_family':category} if category in {'platform_data','developer_release','product_application'} else {'scenario_family':category,'tool_api_version':2}
     (root/'private/initial.json').write_text('{"value":0}')
+    if 'scenario_family' in meta:
+        (root/'private/agent_instructions.txt').write_text(business_guide(root))
     return seal_bundle(root,world_id=name,public_files=['public/task.txt'],metadata=meta)
 
 
@@ -56,6 +59,23 @@ def test_catalogue_rejects_revision_duplicates_and_category_conflict(tmp_path):
     assert load_catalog(p)[0].task_id=='alias'
     p.write_text(json.dumps({'format':'collaboration.tasks.v1','tasks':[row,dict(row,task_id='other')]}))
     with pytest.raises(ValueError,match='Duplicate'):load_catalog(p)
+
+
+def test_cli_catalogue_does_not_require_admission_receipts(tmp_path, capsys):
+    from mac_bench.evaluation.__main__ import main
+    b=bundle(tmp_path,'platform_data')
+    record=task_record(b.root)
+    row={'task_id':record.task_id,'world_revision':record.world_revision,
+         'category':record.category,'split':'test','bundle':'task'}
+    catalog=tmp_path/'catalog.json'
+    catalog.write_text(json.dumps({'format':'collaboration.tasks.v1','tasks':[row]}))
+    args=['--catalog',str(catalog),'--task-id',record.task_id,'--dry-run',
+          '--method','react_single','--repetitions','1','--max-seconds','7200']
+    assert main(args)==0
+    result=json.loads(capsys.readouterr().out)
+    assert result['world_revision']==record.world_revision
+    assert result['budget']['max_seconds']==7200
+    assert result['model_calls']==0 and not result['native_execution']
 
 
 def test_tool_schema_is_independent_and_invalid_calls_do_not_dispatch():
@@ -128,6 +148,7 @@ def test_operational_tutorial_is_discoverable_on_demand_without_private_material
     if with_tutorial:
         (root / 'public/tool_tutorial.md').write_text(tutorial)
         public.append('public/tool_tutorial.md')
+    (root/'private/agent_instructions.txt').write_text(business_guide(root))
     b = seal_bundle(root, world_id='task', public_files=public,
                     metadata={'scenario_family': 'service_administration', 'tool_api_version': 2})
     session = SimpleNamespace(observe=lambda: {}, start_episode=lambda i: None, stop_episode=lambda: None)
@@ -157,12 +178,13 @@ def test_large_public_data_is_on_demand_and_private_paths_are_inaccessible(tmp_p
     (root / 'public').mkdir(parents=True)
     (root / 'private').mkdir()
     text = 'Read these complete requirements.\n' * 600
-    identities = {f'person:P{i}': {'identity': {'id': f'NATIVE-{i}'}} for i in range(500)}
+    records = [{'business_id': f'P{i}', 'identity': {'id': f'NATIVE-{i}'}} for i in range(500)]
     (root / 'public/task.txt').write_text(text)
-    (root / 'public/identities.json').write_text(json.dumps(identities))
+    (root / 'public/records.json').write_text(json.dumps(records))
     (root / 'private/initial.json').write_text('{}')
     (root / 'private/secret.txt').write_text('PRIVATE ANSWER')
-    b = seal_bundle(root, world_id='task', public_files=['public/task.txt', 'public/identities.json'],
+    (root/'private/agent_instructions.txt').write_text(business_guide(root))
+    b = seal_bundle(root, world_id='task', public_files=['public/task.txt', 'public/records.json'],
                     metadata={'scenario_family': 'business_finance', 'tool_api_version': 2})
     session = SimpleNamespace(observe=lambda: {}, start_episode=lambda i: None, stop_episode=lambda: None)
     task = open_task(task_record(b.root), tmp_path / 'runtime', session=session)
@@ -179,13 +201,13 @@ def test_large_public_data_is_on_demand_and_private_paths_are_inaccessible(tmp_p
             break
         offset = part['next_offset']
     assert collected == text
-    exact = call('read_resource', {'resource': 'public/identities.json', 'path': '/person:P499'})
+    exact = call('read_resource', {'resource': 'public/records.json', 'path': '/499'})
     assert next(i['value'] for i in exact['items'] if i['key'] == 'identity')['id'] == 'NATIVE-499'
-    queried = call('query_resource', {'resource': 'public/identities.json',
-        'keys': ['person:P0', 'person:P499'], 'fields': {'id': '/identity/id'}})
+    queried = call('query_resource', {'resource': 'public/records.json',
+        'keys': ['0', '499'], 'fields': {'id': '/identity/id'}})
     assert [r['values']['id'] for r in queried['rows']] == ['NATIVE-0', 'NATIVE-499']
     assert queried['total_matched'] == 2
-    counted = call('query_resource', {'resource': 'public/identities.json', 'limit': 3,
+    counted = call('query_resource', {'resource': 'public/records.json', 'limit': 3,
         'aggregates': [{'name': 'count', 'op': 'count'}], 'fields': {'id': '/identity/id'}})
     assert len(counted['rows']) == 3 and counted['aggregates']['count']['value'] == 500
     assert counted['next_cursor']
@@ -206,15 +228,15 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
     from mac_bench.environments.engineering.product import runtime
     root = tmp_path / 'world'
     (root / 'public').mkdir(parents=True)
-    (root / 'public/task.txt').write_text('Implement the documented feature.')
+    (root / 'public/task.txt').write_text(
+        'Implement the documented feature. Read /work/public/fixtures.txt for the supporting data.')
     support = b'LARGE SUPPORT DATA\n' * 1000
     (root / 'public/fixtures.txt').write_bytes(support)
     writes = {}
-    commands = []
     class Backend:
-        def write_file(self, sandbox, *, path, content):
-            assert isinstance(content, bytes)
-            writes[path] = content
+        def write_files(self, sandbox, *, files):
+            assert all(isinstance(content, bytes) for content in files.values())
+            writes.update(files)
     backend = Backend()
     class Runtime:
         def __init__(self):
@@ -224,8 +246,8 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
             self.sandbox = object()
         def install_source(self, path):
             pass
-        def command(self, name, command, *, timeout):
-            commands.append((name, command, timeout))
+        def command(self, label, command, *, timeout):
+            assert label == 'initialize-public-workspace'
             return SimpleNamespace(exit_code=0)
         def close(self):
             self.sandbox = None
@@ -233,15 +255,16 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
     world = object.__new__(runtime.LoadedProductWorld)
     world.runtime = Runtime()
     world.bundle = SimpleNamespace(root=root, manifest={'public_files': ['public/task.txt', 'public/fixtures.txt']})
-    world.meta = {'initial_snapshot': 'snapshot', 'workspace_archive': 'private/starter.tar'}
-    world._sealed_environment = {}  # Fixture bypasses the normal constructor.
-    world.environment = {'image': 'python:3.12-slim', 'setup': 'true', 'build': 'true'}
+    world.meta = {'workspace_archive': 'private/starter.tar'}
+    world.environment = {'build': 'true', 'image': 'python:3.12', 'setup': []}
+    world.directory = tmp_path / 'run'
+    monkeypatch.setattr(runtime, 'prepare_environment', lambda *a, **kw: 'snapshot')
     world.open()
     assert writes['/work/public/fixtures.txt'] == support
     assert b'LARGE SUPPORT DATA' not in writes['/work/TASK.md']
+    assert b'/work/public/fixtures.txt' in writes['/work/TASK.md']
+    assert b'Implement the documented feature.' in writes['/work/TASK.md']
     assert writes['/work/TASK.md'] == (root / 'public/task.txt').read_bytes()
-    assert commands == [('initialize-public-workspace',
-                         'set -eu\nmkdir -p /work/project\ncd /work/project\ntrue\n', 1800)]
 
 
 def test_resource_unicode_and_escaping_are_byte_bounded_and_lossless(tmp_path):

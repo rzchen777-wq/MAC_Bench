@@ -20,6 +20,28 @@ MANAGED = {'doctype', 'name', 'docstatus', 'modified', 'modified_by', 'creation'
            'flags', 'ignore_permissions', 'ignore_links', 'ignore_mandatory', 'parent', 'parenttype', 'parentfield'}
 
 
+def output_description(operation):
+    if operation == 'list':
+        return ('data is a list of rows containing the requested fields (name only by default). '
+                'Use name to read a full document, including child tables. '
+                'Continue with pagination.next_offset and the same filters, fields and limit; '
+                'a null next_offset ends the listing.')
+    if operation == 'delete':
+        return ('The receipt confirms deletion of the requested document; data is the native '
+                'deletion response, not the deleted document. To check absence, list this entity '
+                'with filters.name equal to the submitted name.')
+    prefix = {
+        'read': 'data is the current document, or the requested fields with name, modified and docstatus retained when present. ',
+        'create': 'data is the document returned by insertion, including its assigned name. ',
+        'update': 'data is the document read back after saving the supplied changes. ',
+        'submit': 'data is the document read back after submission (docstatus=1). ',
+        'cancel': 'data is the document read back after cancellation (docstatus=2). ',
+    }[operation]
+    return prefix + ('name is the document identity; modified is its version for the next write. '
+                     'docstatus is the document lifecycle (0=draft, 1=submitted, 2=cancelled), '
+                     'separate from any business field named status.')
+
+
 def values_schema(context, binding):
     definitions = {}
     def document(selected, root=False):
@@ -65,9 +87,12 @@ def values_schema(context, binding):
                 schema['maxLength'] = constraints['max_length']
             if schema.get('type') == 'integer' and constraints.get('non_negative'):
                 schema['minimum'] = 0
+            description = f.get('description') or f.get('label') or name
+            if schema.get('description'):
+                description += '. ' + schema['description']
             if not constraints.get('required') and not constraints.get('not_nullable'):
                 schema = {'anyOf': [schema, {'type': 'null'}]}
-            properties[name] = {**schema, 'description': f.get('description') or f.get('label') or name,
+            properties[name] = {**schema, 'description': description,
                                 'x-native-constraints': constraints, 'x-native-write': f.get('write', {}),
                                 'x-native-conditions': f.get('native_conditions', {})}
             if refs:
@@ -140,7 +165,12 @@ def operation(context, binding, name, contract):
         notes.extend(['Unspecified fields are preserved. A supplied child array replaces that collection; retain rows you want to keep.',
                       'Use modified from your last read. Submitted fields may be immutable; cancelled documents cannot be saved.'])
     if name in {'submit', 'cancel'}:
-        notes.append(f'{name} requires docstatus={0 if name == "submit" else 1}; the native transition applies controller side effects.')
+        notes.append('Submit changes a draft (docstatus=0) to a submitted document (docstatus=1).'
+                     if name == 'submit' else
+                     'Cancel changes a submitted document (docstatus=1) to a cancelled document (docstatus=2).')
+    if name == 'delete':
+        notes.append('Deletes the document subject to native permission and link checks. '
+                     'Deletion and cancellation are separate operations; use cancel for a submitted document before deletion when required by its lifecycle.')
     if name in {'cancel', 'delete'}:
         notes.append('Version is checked by pre-read; this is not atomic against external native writers.')
     return schema, execute, name == 'read', tuple(notes)

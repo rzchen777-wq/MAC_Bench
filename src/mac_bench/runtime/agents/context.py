@@ -2,6 +2,7 @@
 from dataclasses import dataclass, replace
 import json
 import math
+import re
 import shlex
 from typing import Callable, Sequence
 from mac_bench.runtime.llm.client import ChatMessage, ModelOutputTruncatedError
@@ -65,6 +66,14 @@ class ContextBudgetStop(ContextCapacityError):
     def __init__(self, reason):
         self.reason = reason
         super().__init__('Execution budget exhausted during context management: ' + reason)
+
+
+def valid_working_memory(response):
+    """A provider can emit textual tool syntax even when no tools were supplied."""
+    if not isinstance(response.content, str) or not response.content.strip() or response.tool_calls:
+        return False
+    return not re.search(r'<[^>\n]*DSML[^>\n]*>|<\s*(?:tool_call|function_call|invoke)\b|<\s*function=',
+                         response.content, re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -441,8 +450,27 @@ class WorkingContext:
                     return self._summary_failure(messages, protected, turns, original_memory,
                                                  tools, limit, before, archive)
             self.tokens.observe(batch, (), response.usage)
-            if not response.content.strip() or response.tool_calls:
-                raise ContextCapacityError('Summarizer did not return plain working memory')
+            if not valid_working_memory(response):
+                retries += 1
+                archive({'kind': 'context_summary_retry', 'reason': 'invalid_memory',
+                         'retry': 1})
+                correction = ('\nThe previous response was not working memory. Return factual '
+                    'notes about completed interactions. Do not continue the agent task, '
+                    'propose tool calls, or emit tool-call markup. Return the replacement '
+                    'notes only, beginning with CURRENT WORK and CHANGES AND CHECKS.\n')
+                batch = [replace(batch[0], content=batch[0].content + correction), batch[1]]
+                if self.tokens.count(batch) > summary_capacity:
+                    return self._summary_failure(messages, protected, turns, original_memory,
+                                                 tools, limit, before, archive)
+                try:
+                    response = summarize(batch, retry_output_tokens)
+                except ModelOutputTruncatedError:
+                    response = None
+                if response is None or not valid_working_memory(response):
+                    archive({'kind': 'context_summary_failed', 'reason': 'invalid_memory'})
+                    return self._summary_failure(messages, protected, turns, original_memory,
+                                                 tools, limit, before, archive)
+                self.tokens.observe(batch, (), response.usage)
             memory = response.content.strip()
             calls += 1
             record_index, offset = next_index, next_offset

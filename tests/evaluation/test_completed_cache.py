@@ -225,3 +225,10 @@ def test_context_capacity_failure_is_not_reusable(tmp_path, reason):
     _, first = cache.get_or_run(identity(), blocked)
     _, second = cache.get_or_run(identity(), lambda p: complete(p, identity()))
     assert not first['cacheable'] and not second['reused']
+
+
+def test_verdict_requires_explicit_evaluation_status():
+    with pytest.raises(KeyError, match="status"):
+        evaluation_fields({"complete": True})
+    fields = evaluation_fields({"status": "evaluation_error", "complete": False})
+    assert fields["ps"] is None and fields["rr"] is None

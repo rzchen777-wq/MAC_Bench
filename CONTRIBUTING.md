@@ -5,7 +5,7 @@
 From the repository root:
 
 ```bash
-sudo apt-get install ripgrep
+sudo apt-get install ripgrep nodejs
 pip install -e '.[dev,agents]'
 pytest
 ```

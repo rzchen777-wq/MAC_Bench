@@ -1,6 +1,5 @@
 """Regression cases against the SQL actually shipped with current business tasks."""
 from copy import deepcopy
-import importlib.util
 import json
 from pathlib import Path
 
@@ -8,7 +7,7 @@ import pytest
 
 from mac_bench.environments.tools.contracts import ToolError, validate
 from mac_bench.environments.tools.data_workspace import execute_sql
-from mac_bench.environments.verification.sql import json_keys_match
+from mac_bench.environments.verification.sql import QueryEngine, json_keys_match
 
 from mac_bench.runtime.paths import repository_root
 import os
@@ -27,11 +26,8 @@ def note(current, title, body):
 
 
 def check(number, current, ids):
-    p, v = task(number)
-    spec = importlib.util.spec_from_file_location('sealed_business_sql', p / 'private/sql.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    with module.QueryEngine(v['initial'], current, v['identities'], v['layout'],
+    _, v = task(number)
+    with QueryEngine(v['initial'], current, v['identities'], v['layout'],
                             facts=v['facts'], links=v['links'], max_steps=20_000_000) as db:
         results = {c['id']: db.check(c['sql'], c['binding']['collections'], assertion=c['assertion'])
                    for c in v['checks'] if c['id'] in ids}

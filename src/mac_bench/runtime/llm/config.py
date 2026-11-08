@@ -68,7 +68,6 @@ class LLMConfig:
         base_url = (
             _resolve_env_ref(m.get("base_url"), env)
             or env.get("MAC_BENCH_LLM_BASE_URL")
-            or env.get("DEV_API_BASE")
             or env.get("OPENAI_BASE_URL")
             or env.get("OPENAI_API_BASE")
             or "https://api.openai.com/v1"
@@ -82,14 +81,12 @@ class LLMConfig:
         if not api_key:
             api_key = (
                 env.get("MAC_BENCH_LLM_API_KEY")
-                or env.get("DEV_API_KEY")
                 or env.get("OPENAI_API_KEY")
             )
 
         model = (
             _resolve_env_ref(m.get("model_name") or m.get("model"), env)
             or env.get("MAC_BENCH_LLM_MODEL")
-            or env.get("META_TEAM_MODEL")
             or env.get("OPENAI_MODEL")
             or ""
         )
@@ -113,13 +110,13 @@ class LLMConfig:
         if require_api_key and not api_key:
             raise RuntimeError(
                 "No LLM API key configured. Set llm.api_key_env in "
-                "configs/methods/*.yaml and the matching env var, or "
+                "configs/baselines/*.yaml and the matching env var, or "
                 "MAC_BENCH_LLM_API_KEY / OPENAI_API_KEY."
             )
         if not model:
             raise RuntimeError(
-                "No LLM model configured. Set llm.model in "
-                "configs/methods/*.yaml or MAC_BENCH_LLM_MODEL / OPENAI_MODEL."
+                "No LLM model configured. Set llm.model_name in "
+                "configs/baselines/*.yaml or MAC_BENCH_LLM_MODEL / OPENAI_MODEL."
             )
         try:
             timeout_seconds = float(timeout_raw)

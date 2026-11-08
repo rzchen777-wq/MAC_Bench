@@ -63,7 +63,7 @@ def brief(value, path, *, inline_bytes=600):
             'characters': len(str(value)), 'complete': False}
 
 
-def page(document, *, identity, path='', cursor=None, limit=20, compact=False):
+def page(document, *, identity, path='', cursor=None, limit=20, compact=False, context_provider=None):
     """A page is complete JSON. Large children link to exact retrievable nodes.
 
     String leaves use character continuation; no schema or observation text is
@@ -96,11 +96,17 @@ def page(document, *, identity, path='', cursor=None, limit=20, compact=False):
             key = keys[end]
             entry = {'key': key, **brief(node[key], pointer(path, key), inline_bytes=2000 if compact else 600)}
             candidate = {**base, 'items': [*base['items'], entry], 'next_cursor': continuation(end + 1)}
+            if context_provider and (context := context_provider(node[key], pointer(path, key))):
+                context_id, detail = context
+                entry['context'] = context_id
+                candidate['contexts'] = {**base.get('contexts', {}), context_id: detail}
             if len(encoded(candidate).encode()) > PAGE_BYTES:
                 if not base['items']:
                     raise ToolError('key_too_large', 'This object key exceeds the navigation budget.')
                 break
             base['items'].append(entry)
+            if 'contexts' in candidate:
+                base['contexts'] = candidate['contexts']
             end += 1
         base['next_cursor'] = continuation(end) if end < len(keys) else None
     elif isinstance(node, str):
@@ -127,4 +133,11 @@ def page(document, *, identity, path='', cursor=None, limit=20, compact=False):
         if start:
             raise ToolError('invalid_cursor', 'Scalar values have no continuation.')
         base.update(kind='scalar', value=node)
+    if not isinstance(node, (dict, list)) and context_provider and (context := context_provider(node, path)):
+        context_id, detail = context
+        # A full string page can consume the navigation budget already. Keep a
+        # source-section link in that case; the complete context remains public.
+        if len(encoded({**base, 'context': context_id, 'contexts': {context_id: detail}}).encode()) > PAGE_BYTES:
+            detail = {'section_path': detail['section_path']}
+        base.update(context=context_id, contexts={context_id: detail})
     return base

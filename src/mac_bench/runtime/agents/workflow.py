@@ -624,7 +624,8 @@ class ReactAgent:
         system = self.system_prompt if self.system_prompt is not None else system
         prompt = self.user_prompt if self.user_prompt is not None else prompt
         messages = [ChatMessage("system", system), ChatMessage("user", prompt)]
-        backend = backend_for_workspace(self.tools, workspace)
+        environment = (ExecutionEnvironment(backend_for_workspace(self.tools, workspace), workspace)
+                       if self.workspace_tools else None)
         registry = phase5_tool_registry(self.process_manager) if self.workspace_tools else ToolRegistry()
         for spec in self.extra_tools:
             registry.register(spec)
@@ -636,7 +637,7 @@ class ReactAgent:
             else set()
         )
         tool_context = ToolContext(
-            environment=ExecutionEnvironment(backend, workspace),
+            environment=environment,
             agent_id=agent_id,
             sample_id=task.public_id,
             permissions=frozenset(workspace_names | set(extra_names)),
@@ -1242,7 +1243,7 @@ class ReactSingleWorkflow:
             memory=memory,
             event_callback=event_callback,
         )
-        return self._combine((outcome,), self.tools.collect_patch(workspace))
+        return self._combine((outcome,), self.tools.collect_patch(workspace) if self.workspace_tools else "")
 
     @staticmethod
     def _combine(outcomes: Sequence[AgentOutcome], patch: str) -> TeamOutcome:

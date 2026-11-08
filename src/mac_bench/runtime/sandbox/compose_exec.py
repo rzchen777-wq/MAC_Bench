@@ -56,7 +56,7 @@ def resolve_via_realpath(
     cwd: str | None,
     kind: str,
 ) -> str:
-    """Resolve a path inside the sandbox using ``realpath`` (Daytona-compatible)."""
+    """Resolve a path inside the sandbox using ``realpath``."""
 
     if kind == "write":
         result = backend.exec(
@@ -208,7 +208,7 @@ class DockerComposeAppBackend(SandboxBackend):
         cwd: str,
         tty: bool,
     ) -> BackendProcessHandle:
-        pidfile = f"/tmp/evoteam-process-{session_id}.pid"
+        pidfile = f"/tmp/mac-bench-process-{session_id}.pid"
         inner = (
             f"printf '%s\\n' $$ > {shlex.quote(pidfile)}; "
             f"exec bash -lc {shlex.quote(command)}"

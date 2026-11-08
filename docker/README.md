@@ -36,6 +36,26 @@ docker compose -f docker/compose.yaml run --rm benchmark \
 
 Compose mounts `data/` read-only and shares `outputs/` and `.cache/` with the host. Read `outputs/preschool-react/summary.json` locally to inspect scores, then follow its episode paths for traces. [Evaluation](../docs/evaluation.md#read-results) explains the output fields.
 
+## Run Superagent
+
+Build the target that includes Node and the DeepSeek Harness packages:
+
+```bash
+docker build --target superagent -f docker/Dockerfile -t mac-bench:superagent .
+docker run --rm --env-file .env \
+  -v "$PWD/data:/opt/mac-bench/data:ro" \
+  -v "$PWD/outputs:/opt/mac-bench/outputs" \
+  -v "$PWD/.cache:/opt/mac-bench/.cache" \
+  mac-bench:superagent evaluate \
+  --task-id op26_service_administration_007 \
+  --method superagent --repetitions 1 \
+  --max-tokens 1000000 --max-model-calls 3000 \
+  --max-tool-calls 9000 --max-seconds 7200 \
+  --out outputs/preschool-superagent
+```
+
+Use the model and Modal credentials described above. For GPT-6-Luna through OpenRouter, set `OPENROUTER_API_KEY` in `.env` and add `--method-config configs/baselines/superagent_luna.yaml`.
+
 ## Export software build contexts
 
 For an installed software task, export its dependency setup and public workspace:

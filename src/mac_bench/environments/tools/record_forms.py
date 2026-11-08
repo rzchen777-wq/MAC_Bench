@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from .contracts import Tool, ToolError, encoded, object_schema, validate
 from .registry import ToolRegistry
+from .compound import CompoundOperation
 
 
 FORMAT = 'mac_bench.record_forms.v1'
@@ -115,7 +116,7 @@ class _Stopped(Exception):
         self.receipt = receipt
 
 
-class FormOperation:
+class FormOperation(CompoundOperation):
     def __init__(self, catalog, form, operation, registry):
         self.catalog, self.form, self.operation = catalog, form, operation
         required = {(form['entity'], x) for x in ('findOne', 'createOne', 'updateOne')}

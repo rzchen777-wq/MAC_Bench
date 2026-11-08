@@ -51,6 +51,7 @@ def test_download_installs_task_and_shared_assets(tmp_path):
     entry = export_task(source, delivery / "sample.tar.gz", row)
     asset = delivery / "example"
     asset.write_bytes(b"environment")
+    entry.update({key: row[key] for key in ("world_revision", "category", "split")})
     entry["environment_assets"] = ["environments/example"]
     index = delivery / "downloads.json"
     index.write_text(
@@ -70,3 +71,24 @@ def test_download_installs_task_and_shared_assets(tmp_path):
     download_tasks(installed, index.as_uri(), [row])
     assert (installed / "data/tasks/sample/public/task.txt").read_text() == "Task"
     assert (installed / "data/environments/example").read_bytes() == b"environment"
+
+    # Invalid shared assets must not leave a newly installed task behind.
+    asset.write_bytes(b'corrupted environment')
+    fresh = tmp_path / 'bad-environment'
+    with pytest.raises(ValueError, match="checksum"):
+        download_tasks(fresh, index.as_uri(), [row])
+    assert not (fresh / 'data/tasks/sample').exists()
+    asset.write_bytes(b'environment')
+
+    # A verified installation does not need its remote package again.
+    (delivery / "sample.tar.gz").unlink()
+    download_tasks(installed, index.as_uri(), [row])
+    assert (installed / ".cache/dataset/sample.tar.gz").is_file()
+    assert not (installed / ".cache/downloads").exists()
+
+    # Mirror metadata is checked even when the task is already installed.
+    manifest = json.loads(index.read_text())
+    manifest["tasks"][0]["world_revision"] = "different"
+    index.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="Dataset revision differs"):
+        download_tasks(installed, index.as_uri(), [row])

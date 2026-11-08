@@ -1,15 +1,11 @@
-"""Episode metrics retain evaluation failures and never invent legacy goal scores."""
+"""Episode metrics and evaluation failure reporting."""
 
 import math
 from collections import Counter
 
 
 def evaluation_fields(verdict):
-    status = verdict.get("status")
-    if status is None:
-        # Historical native fixtures expose only a boolean verdict. They can
-        # report task success but have no frozen grouping from which to infer GC.
-        status = "passed" if verdict["complete"] else "failed"
+    status = verdict["status"]
     valid = status in {"passed", "failed"}
     success = status == "passed" if valid else None
     gc = verdict.get("gc") if valid else None

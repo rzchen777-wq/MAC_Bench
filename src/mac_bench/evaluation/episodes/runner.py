@@ -129,7 +129,8 @@ def run_episode(task, baseline, client, *, output, budget=None, close=True, rais
         save()
         outcome = baseline.run(EpisodeContext(task.view, task.environment, gateway, accounting, event,
                                              output / 'native', phase,
-                                             dev_feedback if phase == 'dev' else None))
+                                             dev_feedback if phase == 'dev' else None,
+                                             getattr(task, 'open_execution', None)))
         payload = asdict(outcome) if is_dataclass(outcome) else dict(outcome)
         write_json(payload, output / 'trajectory.json')
         stops = [row for row in payload.get('trace', []) if row.get('kind') == 'agent_stop']

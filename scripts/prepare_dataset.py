@@ -1,5 +1,6 @@
 """Prepare the task packages, viewer tables and shared images for a Hub release."""
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -14,6 +15,16 @@ from mac_bench.runtime.paths import repository_root
 def checksum(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def link_or_copy(source, target):
+    """Share immutable blobs on one filesystem, stream-copy across filesystems."""
+    try:
+        os.link(source, target)
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+        shutil.copyfile(source, target)
 
 
 def prepare(output):
@@ -72,7 +83,7 @@ def prepare(output):
     for name in sorted(needed):
         source, target = base / name, output / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        os.link(source, target)  # Immutable OCI blobs: no second 5 GiB copy.
+        link_or_copy(source, target)
         manifest['assets'][name] = {'url': name, 'bytes': source.stat().st_size, 'sha256': checksum(source)}
     (output / 'data').mkdir(exist_ok=True)
     for split, records in views.items():

@@ -39,6 +39,8 @@ MAC-Bench evaluates multi-agent collaboration through **interconnected tasks** i
 
 <p align="center"><img src="../docs/assets/overview.png" alt="MAC-Bench task example, benchmark scope and main results" width="100%"></p>
 
+<a id="tasks"></a>
+
 ## 🧩 Tasks
 
 Each category contains **eight test tasks and one development task**.
@@ -70,9 +72,11 @@ The Dataset Viewer above contains the complete task descriptions. To browse them
 ```python
 from datasets import load_dataset
 
-tasks = load_dataset("sihuichuibuqi/MAC-Bench", split="test", revision="v1.0")
+tasks = load_dataset("sihuichuibuqi/MAC-Bench", split="test")
 print(tasks[0]["instruction"])
 ```
+
+<a id="download-and-run"></a>
 
 ## 🚀 Download and run
 
@@ -94,7 +98,7 @@ mac-bench data download --split test   # 48 test tasks
 mac-bench data download                # All tasks
 ```
 
-Each download uses a single dataset commit. The client verifies task packages and environment files before use, and records the resolved revision under `.cache/dataset/release.json`. To choose a release explicitly, add `--revision v1.0`.
+Each download uses a single dataset commit. The client verifies task packages and environment files before use, and records the resolved revision under `.cache/dataset/release.json`. To pin a particular dataset commit, add `--revision <commit>`.
 
 ### Download a package directly
 
@@ -106,12 +110,13 @@ from huggingface_hub import hf_hub_download
 archive = hf_hub_download(
     repo_id="sihuichuibuqi/MAC-Bench",
     repo_type="dataset",
-    revision="v1.0",
     filename="packages/flit_packages.tar.gz",
 )
 ```
 
 Software task packages include their workspace, environment recipe and verifier. Business task packages also require the OCI files listed in their `environment_assets` entry in `downloads.json`; `mac-bench data download` fetches these automatically.
+
+<a id="dataset-files"></a>
 
 ## 📂 Dataset files
 
@@ -135,6 +140,8 @@ assets/overview.png             Benchmark overview
 The viewer tables contain `task_id`, `domain`, `category`, `split`, `instruction`, `world_revision` and `package`. Task archives unpack to `manifest.json`, `public/` materials, environment resources and private evaluation files. Here, `private/` identifies evaluator-only files: the task loader exposes public materials and permitted operations to the agent.
 
 Business environments use Twenty, Pretix, HRMS and BigCapital. Initial records and configuration are packaged with each task; common application layers are stored once in the OCI directory. Software tasks provide starter workspaces and dependency recipes. Modal prepares and caches task environments while each episode receives independent task state.
+
+<a id="evaluation"></a>
 
 ## 📊 Evaluation
 

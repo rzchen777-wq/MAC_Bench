@@ -1,1 +1,1 @@
-"""apps / frappe components for Stage III."""
+"""apps / frappe environment components."""

@@ -104,3 +104,59 @@ def test_corrupt_cached_package_is_downloaded_again(hub):
     cached.write_bytes(b'corrupt cached package')
     run(hub)
     assert (hub.root / 'data/tasks/sample/public/task.txt').read_text() == 'Complete the task.'
+
+
+def test_overwrite_restores_installed_task_without_redownloading_images(hub):
+    run(hub)
+    (hub.root / 'data/tasks/sample/public/task.txt').write_text('Local edit')
+    hub.calls.clear()
+    download_hub_tasks(hub.root, [hub.row], repo_id='owner/MAC-Bench', revision='v1.0', overwrite=True)
+    assert (hub.root / 'data/tasks/sample/public/task.txt').read_text() == 'Complete the task.'
+    assert hub.calls == [{'packages/sample.tar.gz'}]
+
+
+@pytest.mark.parametrize('transport', ['hub', 'mirror'])
+@pytest.mark.parametrize('corrupted', [False, True])
+def test_update_cleans_only_previously_installed_unmodified_blobs(hub, transport, corrupted):
+    from mac_bench.download import download_tasks
+
+    prefix = 'environments/images/blobs/sha256/'
+    index = 'environments/images/index.json'
+    def asset(content):
+        name = prefix + hashlib.sha256(content).hexdigest()
+        path = hub.release / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        return name, dict(url=name, sha256=hashlib.sha256(content).hexdigest())
+    old, old_metadata = asset(b'old image')
+    edited, edited_metadata = asset(b'locally editable old image')
+    other, other_metadata = asset(b'another task current image')
+    current, current_metadata = asset(b'current image')
+    def publish(entries, selected, generation):
+        payload = json.dumps({'schemaVersion': 2, 'generation': generation}).encode()
+        (hub.release / index).write_bytes(payload)
+        hub.manifest['assets'] = {**entries, index: dict(url=index, sha256=hashlib.sha256(payload).hexdigest())}
+        hub.manifest['tasks'][0]['environment_assets'] = [index, *selected]
+        (hub.release / 'downloads.json').write_text(json.dumps(hub.manifest))
+    def install():
+        if transport == 'hub':
+            return run(hub)
+        return download_tasks(hub.root, (hub.release / 'downloads.json').as_uri(), [hub.row])
+    publish({old: old_metadata, edited: edited_metadata, other: other_metadata}, [old, edited, other], 1)
+    install()
+    (hub.root / 'data' / edited).write_bytes(b'user edits')
+    unmanaged = hub.root / 'data' / prefix / ('f' * 64)
+    unmanaged.write_bytes(b'unmanaged data')
+    publish({current: current_metadata, other: other_metadata}, [current], 2)
+    if corrupted:
+        (hub.release / current).write_bytes(b'damaged download')
+        with pytest.raises(ValueError, match='checksum'):
+            install()
+        assert (hub.root / 'data' / old).exists()
+    else:
+        install()
+        assert not (hub.root / 'data' / old).exists()
+        assert (hub.root / 'data' / current).read_bytes() == b'current image'
+    assert (hub.root / 'data' / edited).read_bytes() == b'user edits'
+    assert (hub.root / 'data' / other).read_bytes() == b'another task current image'
+    assert unmanaged.read_bytes() == b'unmanaged data'

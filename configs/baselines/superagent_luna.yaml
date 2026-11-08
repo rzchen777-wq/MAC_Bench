@@ -1,0 +1,26 @@
+format: collaboration.method_spec.v1
+implementation_status: implemented
+method: superagent
+protocol_ref: configs/evaluation/baseline_protocol.yaml
+adapter_entrypoint: mac_bench.baselines.superagent.tasks:Superagent
+variant: homogeneous_backbone_shared_world
+# OpenRouter model connection.
+llm:
+  base_url: https://openrouter.ai/api/v1
+  model_name: openai/gpt-6-luna
+  api_key: null
+  api_key_env: OPENROUTER_API_KEY
+  timeout_seconds: 180
+  max_retries: 0
+  thinking: disabled
+model_bindings:
+  router: experiment.model
+  workers: experiment.model
+  subagents: experiment.model
+  compaction: experiment.model
+execution:
+  workspace: shared_episode_world
+  background_grace_seconds: 1800
+model_parameters:
+  max_tokens: 32768
+  context_window: 1050000

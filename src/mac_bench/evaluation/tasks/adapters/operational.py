@@ -4,62 +4,27 @@ from copy import deepcopy
 from pathlib import Path
 from mac_bench.runtime.common.hashing import digest
 from mac_bench.environments.packaging.bundle import WorldBundle
-from mac_bench.environments.tools.api import SCHEMAS, DESCRIPTIONS
+from mac_bench.environments.tools.api import SCHEMAS, DESCRIPTIONS, INTERFACE_VERSION
 from ..protocol import TaskView, ToolDefinition
 from .base import OwnedTask
 from ..resources import PublicResources, LIST_RESOURCES, READ_RESOURCE, QUERY_RESOURCE, SEARCH_RESOURCE
 from mac_bench.environments.tools.contracts import ToolError
-
-GUIDE = '''# Role and Goal
-Complete the user's task by making the required changes in the live business applications.
-Use only the supplied tools. No shell, reference answer, or grading tool is available.
-
-# Task Materials
-Read public/task.txt in full before making changes. Follow next_offset to continue an incomplete read.
-Use list_resources to find supporting files. Use query_resource to look up IDs in public JSON,
-and search_resource to locate passages in public text files. Consult the ID mapping as needed.
-
-# Application Tools
-Discover applications with list_apps and operations with list_tools.
-Before using an unfamiliar operation, read describe_tool. Copy operation names exactly,
-including suffixes, and follow the documented input schema.
-Identify records by their native IDs; names alone may be ambiguous.
-For call_tool, use a new request_id for each new action or fresh read.
-Reuse an ID only to recover the receipt for that same logical call.
-
-# Results and Verification
-Inspect operation results and read back current application records to verify changes.
-An accepted or unknown receipt does not establish completion.
-Use read_result or query_result to inspect a saved large result without executing the operation again.
-Public files and saved receipts are reference material, not live application state.
-A saved receipt and its aggregates cover only that response; retrieve additional application
-pages through fresh application reads.
-
-# Completion
-Check the resulting application state before reporting completion.
-Summarize completed work and any unresolved requirements.
-A completion report does not change application state.'''
 
 
 class OperationalTask(OwnedTask):
     def __init__(self, record, directory, *, backend=None, owner=None, bundle=None, session=None):
         self.record, self.directory = record, Path(directory)
         self.bundle = bundle or WorldBundle.load(record.bundle)
-        if self.bundle.manifest.get('metadata', {}).get('tool_api_version', 2 if session else None) != 2:
+        if self.bundle.manifest.get('metadata', {}).get('tool_api_version') != INTERFACE_VERSION:
             raise ValueError('Operational tasks require tool API v2')
         self._owner, self._borrowed, self._backend = owner, session, backend
-        from mac_bench.environments.packaging.interface import host_components
-        api, resources, guide, version = host_components(self.bundle)
-        self.resources = resources.PublicResources(self.bundle)
-        self._resource_errors = (ToolError, resources.ToolError)
-        instructions = guide
-        if 'public/tool_tutorial.md' in self.resources.names:
-            instructions = guide.replace(
-                'Consult the ID mapping as needed.',
-                'Consult the ID mapping as needed. Read public/tool_tutorial.md for a worked tool-use example.')
+        self._scratch = None
+        self.resources = PublicResources(self.bundle)
+        self._resource_errors = (ToolError,)
+        instructions = (self.bundle.root / 'private/agent_instructions.txt').read_text()
         self._configure(TaskView(record.task_id, record.world_revision, self.resources.instruction(),
-                          (resources.LIST_RESOURCES, resources.READ_RESOURCE, resources.QUERY_RESOURCE, resources.SEARCH_RESOURCE) + tuple(
-                              ToolDefinition(k, api.DESCRIPTIONS[k], deepcopy(v)) for k, v in api.SCHEMAS.items()), instructions))
+                          (LIST_RESOURCES, READ_RESOURCE, QUERY_RESOURCE, SEARCH_RESOURCE) + tuple(
+                              ToolDefinition(k, DESCRIPTIONS[k], deepcopy(v)) for k, v in SCHEMAS.items()), instructions))
 
     @property
     def _session(self):
@@ -107,7 +72,50 @@ class OperationalTask(OwnedTask):
         return self.assert_initial()
 
     def _start(self, instance_id):
+        (self.directory / 'execution_outputs.tar').unlink(missing_ok=True)
         self._session.start_episode(instance_id)
+
+    def _open_execution(self):
+        from ..execution import TaskExecution
+        from mac_bench.runtime.sandbox.modal import ModalSandboxBackend
+        # Team notes and scripts share one small workspace, separate from the
+        # application host. Application access still goes through public tools.
+        backend = ModalSandboxBackend(cpu=.5, memory_mib=512, timeout=86400)
+        sandbox = backend.create(name='mac-bench-agent-workspace', image='python:3.12-slim',
+                                 network_blocked=True)
+        self._scratch = (backend, sandbox)
+        self._workspace_receipt(sandbox, 'running')
+        try:
+            result = backend.exec(sandbox, 'mkdir -p /work/project /work/tool-output', timeout=30)
+            if result.exit_code:
+                raise RuntimeError('Cannot prepare the shared agent workspace')
+            backend.write_files(sandbox, files={
+                '/work/project/' + name: (self.bundle.root / name).read_bytes()
+                for name in self.resources.names})
+            return TaskExecution(backend, sandbox, '/work/project',
+                                 output_archive=self.directory / 'execution_outputs.tar',
+                                 public_environment=self.environment, tool_definitions=self.view.tools)
+        except BaseException:
+            self._close_scratch()
+            raise
+
+    def _close_scratch(self):
+        if self._scratch is not None:
+            backend, sandbox = self._scratch
+            backend.delete(sandbox)
+            self._workspace_receipt(sandbox, 'terminated')
+            self._scratch = None
+
+    def _workspace_receipt(self, sandbox, status):
+        from mac_bench.runtime.common.artifacts import write_json
+        self.directory.mkdir(parents=True, exist_ok=True)
+        write_json({'id': sandbox.id, 'status': status}, self.directory / 'agent_workspace.json')
+
+    def _close_execution(self):
+        try:
+            super()._close_execution()
+        finally:
+            self._close_scratch()
 
     def _stop(self):
         self._session.stop_episode()
@@ -134,6 +142,7 @@ class OperationalTask(OwnedTask):
         return self._session.observe_and_evaluate()
 
     def export_receipts(self, destination):
+        super().export_receipts(destination)
         self._session.export_receipts(Path(destination) / 'native_calls.sqlite')
 
     def _lifecycle_event(self, value):

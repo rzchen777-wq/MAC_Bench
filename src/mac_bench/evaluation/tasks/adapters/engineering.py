@@ -1,6 +1,7 @@
 """Persistent terminal workspace, frozen source submission, independent grader."""
 from pathlib import Path
 from hashlib import sha256
+from threading import Lock
 from mac_bench.environments.packaging.bundle import WorldBundle
 from ..protocol import TaskView, ToolDefinition
 from .base import OwnedTask
@@ -12,7 +13,8 @@ TERMINAL = ToolDefinition('terminal',
     'full_output_path; large output returns a bounded preview. Use grep or selected line ranges on that '
     'file instead of rerunning the command or printing the entire log. Nonzero exit codes are returned. '
     'Timeout stops the command process group. Each command and its descendants share a 6 GiB resident-memory cap; '
-    'individual processes also have a 6 GiB data-allocation cap. Workspace files persist after limits.',
+    'concurrent commands share a 6 GiB resident-memory cap, stopping the largest active command if exceeded. '
+    'Individual processes also have a 6 GiB data-allocation cap. Workspace files persist after limits.',
     {'type': 'object', 'properties': {'command': {'type': 'string', 'minLength': 1},
         'timeout': {'type': 'integer', 'minimum': 1, 'maximum': 300}},
      'required': ['command'], 'additionalProperties': False})
@@ -33,6 +35,7 @@ class EngineeringTask(OwnedTask):
         self._world, self._backend = world, backend
         self._submission = None
         self._output_number = 0
+        self._output_lock = Lock()
         instruction = ('Complete the software task documented in /work/TASK.md. '
                        'Read that file through terminal for the full requirements, public materials, '
                        'interpreter and test commands. The persistent source workspace is /work/project. '
@@ -72,17 +75,26 @@ class EngineeringTask(OwnedTask):
         return self.assert_initial()
 
     def _start(self, instance_id):
+        (self.directory / 'execution_outputs.tar').unlink(missing_ok=True)
         self._instance = instance_id
         self._output_number = 0
+
+    def _open_execution(self):
+        from ..execution import TaskExecution
+        runtime = self._world.runtime
+        return TaskExecution(runtime.backend, runtime.sandbox, '/work/project',
+                             output_archive=self.directory / 'execution_outputs.tar')
 
     def _stop(self):
         target = self.directory / ('submission-' + sha256(self._instance.encode()).hexdigest()[:16] + '.tar')
         self._submission = self._world.export_submission(target)
 
     def _dispatch(self, name, arguments):
-        self._output_number += 1
+        with self._output_lock:
+            self._output_number += 1
+            output_number = self._output_number
         episode = sha256(self._instance.encode()).hexdigest()[:16]
-        log_path = f'/work/tool-output/{episode}/{self._output_number:06}.log'
+        log_path = f'/work/tool-output/{episode}/{output_number:06}.log'
         timeout = arguments.get('timeout', 120)
         command = capture_command(arguments['command'], log_path, timeout_seconds=timeout)
         # Allow the supervisor to stop descendants and return its saved log.
@@ -101,6 +113,7 @@ class EngineeringTask(OwnedTask):
         return self._world.grade_submission(self._submission)
 
     def export_receipts(self, destination):
+        super().export_receipts(destination)
         # Keep full terminal logs after sandbox deletion, including output that
         # the model only saw through a bounded preview. Owner-side export is not
         # an agent tool call and does not expose private grader materials.

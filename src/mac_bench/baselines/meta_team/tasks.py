@@ -18,6 +18,44 @@ PUBLIC_RESOURCE_TOOLS = {'list_resources','read_resource','query_resource',
 NATIVE_COMMUNICATION_TOOLS = frozenset({'send_message', 'wait_for_replies'})
 
 
+class _EnvironmentCalls:
+    """Bound concurrent world operations and drain them before sealing a task."""
+
+    def __init__(self, gateway, max_inflight=4):
+        self.gateway = gateway
+        self.closed = False
+        self._slots = asyncio.Semaphore(max_inflight)
+        self._pending = set()
+
+    async def call(self, name, arguments):
+        # Registration contains no await: sealing cannot miss an operation.
+        operation = asyncio.create_task(self._invoke(name, arguments))
+        self._pending.add(operation)
+        operation.add_done_callback(self._finished)
+        # The invocation owns its slot. Cancelling a native worker does not
+        # release capacity while its underlying world operation still runs.
+        return await asyncio.shield(operation)
+
+    def _finished(self, operation):
+        self._pending.discard(operation)
+        if not operation.cancelled():
+            operation.exception()  # Also retrieve failures of cancelled callers.
+
+    async def _invoke(self, name, arguments):
+        async with self._slots:
+            if self.closed:
+                return {'error': {'code': 'dev_candidate_sealed',
+                    'message': 'Task execution ended; application tools are closed.'}}
+            return await self.gateway.tool(name, arguments)
+
+    async def close(self):
+        self.closed = True
+        if self._pending:
+            await asyncio.gather(*(asyncio.shield(t) for t in tuple(self._pending)),
+                                 return_exceptions=True)
+        self._pending.clear()
+
+
 def _propagate_completion_stop(stop):
     from mac_bench.runtime.llm.client import ModelOutputTruncatedError
     # The native agent loop owns malformed model output. Keep infrastructure
@@ -36,6 +74,15 @@ def _install_native_lifecycle_status(runner, Agent):
     original_check = messaging.execute_check_agent_status
     original_wait = Agent._handle_wait_for_replies
     original_execute = Agent._execute_tool_call
+    original_terminate = runner.terminate
+
+    def terminate(reason='chairman_terminate'):
+        phase = runner._phase
+        original_terminate(reason=reason)
+        # Explicitly ending L3 keeps accepted L1/L2 changes and declines any
+        # unapplied L3 proposal. Native terminate previously left a stale phase.
+        if phase == 'l3_reflection' and runner.message_store.is_terminated():
+            runner._phase = 'terminated'
 
     def states():
         result = original_states()
@@ -97,6 +144,8 @@ def _install_native_lifecycle_status(runner, Agent):
         return await original_wait(agent, args)
 
     async def execute(agent, name, args, cwd=None):
+        if runner.message_store.is_terminated():
+            return 'Session ended. This tool call was not executed.'
         # Keep native authorization, validation and actions. Correct only its
         # membership-based "running/ACTIVE" descriptions of completed loops.
         result = await original_execute(agent, name, args, cwd)
@@ -116,6 +165,7 @@ def _install_native_lifecycle_status(runner, Agent):
         return result
 
     runner.get_agent_states = states
+    runner.terminate = terminate
     runner.stop_agent = stop
     messaging.execute_check_agent_status = check
     Agent._handle_wait_for_replies = wait
@@ -290,17 +340,13 @@ class MetaTeam:
             if domain not in self.pools:
                 member['max_steps'] = member_limits[member['name']]
             p.write_text(yaml.safe_dump(member,sort_keys=False))
-        access_lock = asyncio.Lock()
-        world_closed = False
+        environment_calls = _EnvironmentCalls(gateway)
         registry=ToolRegistry(str(directory/'no_host_tools'))
         for definition in context.task.tools:
             async def execute(_definition=definition, **arguments):
                 arguments.pop('cwd',None)
-                async with access_lock:
-                    if world_closed:
-                        return json.dumps({'error': {'code': 'dev_candidate_sealed',
-                            'message': 'Task execution ended. Reflect on the frozen submission and feedback; application tools are closed.'}})
-                    return json.dumps(await gateway.tool(_definition.name,arguments),ensure_ascii=False)
+                return json.dumps(await environment_calls.call(_definition.name, arguments),
+                                  ensure_ascii=False)
             registry._tools[definition.name]=Tool(definition.name,
                 definition.as_function()['function'],execute)
         settings=config['settings']
@@ -342,22 +388,36 @@ class MetaTeam:
         llm.complete = complete
         if context.phase == 'dev':
             from core.types import TaskValidation
+            feedback_task = None
+
+            async def capture_feedback():
+                await environment_calls.close()
+                return await asyncio.to_thread(context.dev_feedback)
+
+            async def sealed_feedback():
+                nonlocal feedback_task
+                if feedback_task is None:
+                    feedback_task = asyncio.create_task(capture_feedback())
+                return await asyncio.shield(feedback_task)
+
             async def validator(output):
-                nonlocal world_closed
-                async with access_lock:
-                    world_closed = True
-                    feedback = await asyncio.to_thread(context.dev_feedback)
+                feedback = await sealed_feedback()
                 return TaskValidation(success=feedback.task_success is True,
                     summary=f'Dev evaluation: {feedback.evaluation_status}; PS={feedback.ps}; RR={feedback.rr}.',
                     details='The candidate is sealed. No private rules, tests or reference implementation are exposed.')
-            def forced_capture():
-                nonlocal world_closed
-                world_closed = True
-                feedback = context.dev_feedback()
+            enter_forced_reflection = runner._enter_forced_reflection
+
+            async def forced_reflection(event_log=None):
+                # Upstream's pre-reflection hook is synchronous. Await draining
+                # here instead of blocking the event loop in that hook while
+                # worker operations still need it to finish.
+                feedback = await sealed_feedback()
                 runner._task_validation = TaskValidation(success=feedback.task_success is True,
                     summary=f'Dev evaluation: {feedback.evaluation_status}; PS={feedback.ps}; RR={feedback.rr}.')
+                await enter_forced_reflection(event_log)
+
             runner.set_task_validator(validator)
-            runner.set_pre_reflection_hook(forced_capture)
+            runner._enter_forced_reflection = forced_reflection
         error=None
         original=Agent.run_loop
         async def tracked(agent,*args,**kwargs):
@@ -412,6 +472,7 @@ class MetaTeam:
             # Original Runner cleanup is not guaranteed if its task fails early.
             from tools.primitives import cleanup_handlers
             runner.message_store.terminate(reason='episode_closed')
+            await environment_calls.close()
             remaining=[t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             for task in remaining:task.cancel()
             if remaining:await asyncio.gather(*remaining,return_exceptions=True)

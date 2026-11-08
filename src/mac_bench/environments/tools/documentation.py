@@ -15,6 +15,7 @@ ERRORS = {
     'native_schema_mismatch': 'The application could not resolve a database field or relation; this is not evidence of an invalid record ID. '
                               'For reads, select basic record fields explicitly. For writes, inspect current state before another attempt.',
     'request_id_conflict': 'One request_id identifies one exact invocation. Use a new ID for different input or a fresh read.',
+    'duplicate_allocation_target': 'Combine additional amounts into one entry per invoice or bill; no native request was sent.',
 }
 
 
@@ -30,9 +31,22 @@ def usage(tool):
             'returns': tool.output_description,
             'lifecycle': list(tool.notes),
             'details': ['input', 'fields', 'output', 'lifecycle', 'errors', 'examples'],
-            'result_navigation': 'Large results return a result_ref. read_result retrieves saved data without another app call.',
+            'result_navigation': 'read_result retrieves saved data without another app call. Use result_ref, or the original request_id if the reply was lost; path="" includes status and error.',
             'retry': 'Use a new request_id for a fresh read or different operation. Reuse it only to recover the same receipt. Never automatically retry unknown writes.'}
     example = call_example(tool)
+    readback = tool.native_contract.get('output', {}).get('document_read')
+    if readback:
+        card['readback'] = deepcopy(readback)
+    overview = tool.native_contract.get('output', {}).get('record_overview')
+    if overview:
+        from .presentation import overview_example
+        card['response_example'] = {
+            'data': overview_example(overview),
+            'data_view': 'document_overview', 'data_complete': False,
+        }
+        card['response_example_note'] = 'Fictional document illustrating the returned data fields.'
+        card['output_navigation'] = {'section': 'output', 'path': '/record_overview',
+                                     'instruction': 'Field types, meanings and optionality for data.'}
     if example and len(encoded(example).encode()) <= 2500:
         card['call_example'] = example
         card['example_note'] = 'Schema-checked fictional template, not a native execution or task solution. Replace sample values with actual IDs and business values.'
@@ -41,7 +55,6 @@ def usage(tool):
         card['input'] = {'section': 'input', 'path': '/properties', 'field_count': len(properties),
                          'required_path': '/required'}
         card['lifecycle'] = {'section': 'lifecycle', 'path': ''}
-    card['presentation_version'] = 3
     return card
 
 
@@ -58,7 +71,9 @@ def describe(tool, revision, *, section='usage', path='', cursor=None, limit=20)
                  'lifecycle': {'notes': list(tool.notes), 'native': {
                      k: v for k, v in tool.native_contract.get('operation_contract', {}).items()
                      if k in ('description', 'required_fields', 'permissions')}},
-                 'errors': ERRORS, 'examples': tool.native_contract.get('examples', [])}
+                 'errors': {**ERRORS, **({'no_write_errors': tool.native_contract['no_write_errors']}
+                     if tool.native_contract.get('no_write_errors') else {})},
+                 'examples': tool.native_contract.get('examples', [])}
     if section not in documents:
         raise ToolError('invalid_section', 'Choose usage, input, raw_input, fields, output, lifecycle, errors or examples.')
     return {'revision': revision, 'tool_name': tool.name, 'section': section,

@@ -1,7 +1,7 @@
 """Bounded reads and explicit row edits in existing JSON registers.
 
-Native storage remains a Twenty note/task. The world service orders all its
-agent calls under one lock; content versions reject stale editor snapshots.
+Native storage remains a Twenty note/task. The world service orders calls within
+each application; content versions reject stale editor snapshots.
 This is not an atomic transaction against unrelated external application writers.
 """
 from copy import deepcopy
@@ -178,7 +178,7 @@ def extend(registry):
                 ('Supports an explicitly selected array of objects with unique keys inside a JSON document. It does not infer fields, outcomes or business decisions.',
                  'Initialize a new register with records.note.create or records.task.create using the public title and actual format, e.g. content={"volunteers":[]}; read/edit with array_path=/volunteers. Preserve the task-defined field names.',
                  'Patch first validates all keys and the content version, then performs at most one native update and reads back the complete saved register.',
-                 'Agent calls through this world service are serialized. External application writers are not covered by a native transaction.',
+                 'Calls within each application are serialized; different applications may run concurrently. External application writers are not covered by a native transaction.',
                  'Unknown/partial writes are not retried. Read current rows and receipts; use a new request ID only after resolving the prior outcome.',
                  'Version/cursor values describe live reads; replaying a request returns the old receipt, not refreshed data.'), {}))
     return ToolRegistry(tools, catalog_revision=registry.catalog_revision)

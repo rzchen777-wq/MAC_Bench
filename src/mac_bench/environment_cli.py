@@ -167,7 +167,10 @@ def main(argv=None):
     )
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--rebuild", action="store_true", help="Rebuild a software dependency image")
     args = parser.parse_args(argv)
+    if args.rebuild and args.command != 'prepare':
+        parser.error('--rebuild is used with environment prepare')
     base, rows = catalog_rows(repository_root(), [args.task_id])
     row = rows[0]
     record = task_record(
@@ -198,7 +201,7 @@ def main(argv=None):
         environment = read_environment(record.bundle)
         result = {
             "task_id": record.task_id,
-            "snapshot": prepare_environment(environment, output),
+            "snapshot": prepare_environment(environment, output, rebuild=args.rebuild),
         }
     else:
         result = check_task(record, output)

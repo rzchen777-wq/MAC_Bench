@@ -107,3 +107,63 @@ def test_default_catalogue_selects_task(task_data,monkeypatch,capsys):
     result=json.loads(capsys.readouterr().out)
     assert result['task_id']=='sample'
     assert result['world']==str(base/'tasks/sample')
+
+
+def test_export_is_reproducible_across_names_and_file_timestamps(task_data, tmp_path):
+    import os
+    _, world, row = task_data
+    first = export_task(world, tmp_path / 'first.tar.gz', row)
+    os.utime(world / 'public/task.txt', (1234567890, 1234567890))
+    second = export_task(world, tmp_path / 'second.tar.gz', row)
+    assert first['sha256'] == second['sha256']
+
+
+def test_explicit_overwrite_replaces_task_and_removes_extra_files(task_data, tmp_path):
+    _, world, row = task_data
+    target = tmp_path / 'installed'
+    import_task(world, target, row)
+    (target / 'public/task.txt').write_text('Local edits')
+    (target / 'extra.txt').write_text('Extra data')
+    archive = tmp_path / 'task.tar.gz'
+    export_task(world, archive, row)
+    assert install_archive(archive, target, row, overwrite=True)
+    assert (target / 'public/task.txt').read_text() == 'Complete the task.'
+    assert not (target / 'extra.txt').exists()
+    assert not list(tmp_path.glob('.task-*'))
+
+
+def test_invalid_replacement_preserves_installed_task(task_data, tmp_path):
+    _, world, row = task_data
+    target = tmp_path / 'installed'
+    import_task(world, target, row)
+    (world / 'public/task.txt').write_text('Corrupt package')
+    with pytest.raises(ValueError):
+        import_task(world, target, row, overwrite=True)
+    assert (target / 'public/task.txt').read_text() == 'Complete the task.'
+
+
+def test_environment_verification_checks_only_selected_blobs(task_data, tmp_path):
+    import hashlib
+    from mac_bench.data_cli import verify_environment_assets
+    base, world, row = task_data
+    (world / 'environment').mkdir()
+    (world / 'environment/environment.json').write_text(json.dumps({'services':[{'image':'app'}]}))
+    images = base / 'environments/images'
+    blobs = images / 'blobs/sha256'
+    blobs.mkdir(parents=True)
+    (images / 'oci-layout').write_text('{"imageLayoutVersion":"1.0.0"}')
+    content=b'layer';digest=hashlib.sha256(content).hexdigest();path=blobs/digest;path.write_bytes(content)
+    (images/'index.json').write_text(json.dumps({'manifests':[
+        {'digest':'sha256:'+digest, 'mediaType':'application/vnd.oci.image.layer.v1.tar',
+         'annotations':{'org.opencontainers.image.ref.name':'app'}},
+        {'digest':'sha256:'+'0'*64, 'mediaType':'application/vnd.oci.image.layer.v1.tar',
+         'annotations':{'org.opencontainers.image.ref.name':'unselected'}}]}))
+    checked=set()
+    assert verify_environment_assets(base.parent,row,checked=checked)==1
+    assert checked=={path}
+    path.write_bytes(b'corrupt')
+    with pytest.raises(ValueError,match='Environment checksum differs'):
+        verify_environment_assets(base.parent,row)
+    path.unlink()
+    with pytest.raises(FileNotFoundError,match='Missing environment file'):
+        verify_environment_assets(base.parent,row,checksums=False)

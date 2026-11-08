@@ -1,6 +1,7 @@
 """Full output remains accessible and previewing never reruns the command."""
 import subprocess
 import json
+from hashlib import sha256
 from types import SimpleNamespace
 
 from mac_bench.evaluation.tasks.terminal_output import capture_command, output_result
@@ -81,3 +82,32 @@ def test_resident_limit_includes_parallel_children(tmp_path):
     result = output_result(SimpleNamespace(stdout=proc.stdout,exit_code=proc.returncode,
         duration_seconds=0),str(log))
     assert result['exit_code'] == 137 and result['resource_limit_exceeded'] == 'memory'
+
+
+def test_concurrent_commands_share_resident_budget_and_leave_small_reads_usable(tmp_path):
+    # Each command is within its own limit, but the pair exceeds the shared one.
+    command = "python3 -c 'import time;a=bytearray(55*1024*1024);time.sleep(1.5)'"
+    processes = []
+    try:
+        for i in range(2):
+            log = tmp_path/f'parallel-{i}.log'
+            wrapped = capture_command(command, str(log), cwd=str(tmp_path), memory_limit_mib=96)
+            processes.append((log, subprocess.Popen(['sh', '-c', wrapped],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)))
+        results = []
+        for log, proc in processes:
+            stdout, stderr = proc.communicate(timeout=5)
+            assert not stderr
+            results.append(output_result(SimpleNamespace(stdout=stdout,
+                exit_code=proc.returncode, duration_seconds=0), str(log)))
+        assert any(r.get('resource_limit_exceeded') == 'shared_memory' for r in results)
+        assert any(r['exit_code'] == 0 for r in results)
+        assert all(r['shared_command_memory_limit_mib'] == 96 for r in results)
+        registry = tmp_path.parent / '.mac-bench-command-resources' / sha256(str(tmp_path.resolve()).encode()).hexdigest()[:16]
+        assert {p.name for p in registry.iterdir()} == {'lock'}
+        assert run('printf available', tmp_path/'read.log', tmp_path)['output'] == 'available'
+    finally:
+        for _, proc in processes:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()

@@ -34,9 +34,9 @@ class Appointment(CompoundOperation):
             errors = list(Draft202012Validator(self.schema, format_checker=FormatChecker()).iter_errors(arguments))
             if errors:
                 raise ToolError('invalid_arguments', 'Invalid appointment format at ' + '.'.join(map(str, errors[0].path)))
-            before = steps.one(EVENT, identity, EVENT_FIELDS) if identity else {}
             if self.action == 'read':
                 return self.readback(steps, identity)
+            before = steps.one(EVENT, identity, EVENT_FIELDS) if identity else {}
             data = {k: deepcopy(arguments[k]) for k in EVENT_FIELDS if k != 'id' and k in arguments}
             current = {**before, **data}
             if not current.get('startsAt') or not current.get('endsAt') or stamp(current['endsAt']) <= stamp(current['startsAt']):
@@ -118,7 +118,8 @@ def extend(registry):
             continue
         props, required = {}, []
         if action != 'create':
-            props['event_id'] = {'type': 'string', 'minLength': 1}
+            props['event_id'] = {'type': 'string', 'minLength': 1,
+                'description': 'Calendar event UUID: event_id from appointment creation or id from a native calendar-event query.'}
             required.append('event_id')
         if action != 'read':
             props.update({k: {'type': 'string'} for k in ('title', 'location', 'description')})
@@ -139,14 +140,26 @@ def extend(registry):
                 required += ['title', 'startsAt', 'endsAt', 'calendar_channel_id']
         schema = object_schema(props, required)
         base = operations[EVENT, 'findOne' if action == 'read' else action + 'One']
+        description = {
+            'create': 'Create a calendar event and link it to the selected calendar and supplied participants.',
+            'read': 'Read a calendar event, its linked calendars and participants from the current application state.',
+            'update': 'Update supplied calendar-event fields and add or update the specified calendar and participant links.',
+        }[action]
+        notes = ['Calendar entries, venue bookings, enrolments and staffing duties are separate application records.']
+        if action != 'read':
+            notes.extend([
+                'Supplied participants are upserted by personId; omitted participants/calendars are preserved. Use native operations for removals.',
+                'The operation reads back the event and relationships after writing. It does not check availability or obtain participant acceptance.',
+                'Writes are not atomic across native steps. On partial/unknown results, use confirmed IDs and step receipts to inspect live state before continuing.',
+            ])
+        else:
+            notes.append('Reads the event and its relationships in separate native queries; concurrent external changes may occur between them.')
         tools.append(Tool('calendar.appointment.' + action, 'twenty', 'twenty.appointment', action,
-            base.binding, base.scope, action.capitalize() + ' a native calendar appointment with explicitly supplied calendar/participant links. '
-            'This does not reserve a venue, submit staffing duties, change enrolment or infer permission.',
-            schema, 'data contains event_id, event, calendar_links, participants and native step receipts.',
+            base.binding, base.scope, description,
+            schema, 'On success, data contains event_id, event, calendar_links, participants and steps. '
+            'steps lists native call IDs and outcomes; read_result retrieves each saved receipt. '
+            'An incomplete operation returns available IDs and steps with its error.',
             action == 'read', Appointment(action, operations, schema),
-            ('Create explicitly links the event to the selected visible calendar. Update preserves omitted fields and existing relationships.',
-             'Supplied participants are upserted by personId; omitted participants/calendars are not deleted. Use native operations for removals.',
-             'Operations are not atomic across native steps. partial/unknown return confirmed IDs; inspect live state before recovery.',
-             'Read is a live observation. Success does not prove schedule feasibility, authorization or business completion.'),
+            tuple(notes),
             {'output': {'event_id': 'Native event UUID', 'steps': 'Attributed native receipts'}}))
     return ToolRegistry(tools, catalog_revision=registry.catalog_revision)

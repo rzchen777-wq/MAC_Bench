@@ -1,7 +1,8 @@
-"""Task-API registry, separate from the older stream-method registry."""
+"""Built-in baseline adapters for the task API."""
 import importlib
 
 METHODS = {
+    'superagent': ('mac_bench.baselines.superagent.tasks','Superagent'),
     'react_single': ('mac_bench.baselines.react_single.tasks','ReactSingle'),
     'aorchestra': ('mac_bench.baselines.aorchestra.tasks','AOrchestra'),
     'meta_team': ('mac_bench.baselines.meta_team.tasks','MetaTeam'),

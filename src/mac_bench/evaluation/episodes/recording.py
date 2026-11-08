@@ -24,6 +24,14 @@ class RecordingClient:
     def capabilities(self):
         return getattr(self.client, 'capabilities', frozenset())
 
+    def native_attempt(self, request, *, protocol, identity):
+        """Record one wire-protocol attempt without translating its model context.
+
+        The native harness owns retries. Every HTTP attempt enters the same
+        admission ledger as chat calls, including failed and partial streams.
+        """
+        return NativeAttempt(self, request, protocol=protocol, identity=identity)
+
     def complete(self, messages, **kwargs):
         from uuid import uuid4
         from mac_bench.runtime.llm.gateway import is_retryable
@@ -88,3 +96,54 @@ class RecordingClient:
         finally:
             if self.budget:
                 self.budget.release_model()
+
+
+class NativeAttempt:
+    def __init__(self, client, request, *, protocol, identity):
+        self.client = client
+        self.record = {'status': 'pending', 'protocol': protocol,
+                       'request': request, 'identity': dict(identity)}
+        self.usage = None
+
+    def __enter__(self):
+        client = self.client
+        if client.budget:
+            client.budget.admit_model()
+        try:
+            with client._lock:
+                client.count += 1
+                self.path = client.root / f'{client.count:04}.json'
+                self.record['identity']['provider_attempt_id'] = f'native:{client.count}'
+            self.response_path = self.path.with_suffix('.response.sse')
+            self.started = time.monotonic()
+            self.record['started_at_utc'] = datetime.now(timezone.utc).isoformat()
+            self.record['response_file'] = self.response_path.name
+            write_json(self.record, self.path)
+            return self
+        except BaseException:
+            if client.budget:
+                client.budget.release_model()
+            raise
+
+    def __exit__(self, kind, error, traceback):
+        client = self.client
+        try:
+            if self.usage is not None:
+                if client.budget:
+                    client.budget.complete_model(self.usage)
+                with client._lock:
+                    client.input_tokens += self.usage['prompt_tokens']
+                    client.output_tokens += self.usage['completion_tokens']
+                self.record['usage'] = dict(self.usage)
+            if error is None:
+                with client._lock:
+                    client.completed_calls += 1
+            self.record.update(status='error' if error else 'completed',
+                elapsed_seconds=time.monotonic() - self.started,
+                finished_at_utc=datetime.now(timezone.utc).isoformat())
+            if error:
+                self.record['error_type'] = type(error).__name__
+            write_json(self.record, self.path)
+        finally:
+            if client.budget:
+                client.budget.release_model()

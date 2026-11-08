@@ -59,7 +59,7 @@ Task materials
 
 Use public/materials.json to find the original business evidence by subject or business reference. It links to commission, workforce, centre-and-programme and family dossiers in public/business_materials.md and their Twenty notes. They connect existing evidence; all original source notes remain present and protected.
 
-Twenty notes titled BPPA SOURCE ... contain signed applications, evidence, appeals, programme details and family contacts. Pretix holds free place reservations; Twenty holds induction calendars; HRMS holds officers' qualifications, leave and duties. Use public/records.json and the identity maps to locate records. Full admissions conditions and seven register formats are in public/business_policy.md and public/recording.md.
+Twenty notes titled BPPA SOURCE ... contain signed applications, evidence, appeals, programme details and family contacts. Pretix holds free place reservations; Twenty holds induction calendars; HRMS holds officers' qualifications, leave and duties. Use public/records.json to locate records. Full admissions conditions and seven register formats are in public/business_policy.md and public/recording.md.
 
 Required outcomes
 
@@ -79,13 +79,15 @@ Implement Flit's metadata handling, source selection, wheels, source archives an
 <details>
 <summary>📄 <strong>Read the full task instructions</strong> · Flit backend</summary>
 
-Complete the release packaging backend
+**Complete the release packaging backend**
 
 Implement the missing release backend in Flit 3.12.0. Application developers
 need this backend to turn Python projects into distributable wheels and source
 archives, then install and run those deliverables in environments that do not
 contain the builder or project checkout. This is the complete flit_core subsystem,
 with five responsibilities rather than a single packaging example.
+
+**Required behavior**
 
 1. Configuration and metadata: read supported legacy and PEP621 pyproject
    metadata; validate options, names, versions, dependencies, optional groups,
@@ -110,9 +112,33 @@ Choose your own implementation; grading checks artifacts in a fresh offline
 consumer with neither flit_core nor the source workspace, not source identity.
 Version normalization and configuration exception declarations must remain usable.
 
-Workspace: /work/project. Python: /opt/engineering/bin/python.
-Set PYTHONPATH=/work/project/flit_core. Public checks:
-/opt/engineering/bin/python -m pytest -q flit_core/tests_core/
+**Development**
+
+Your editable source is `/work/project`. Dependencies and the initial build are prepared before you enter the workspace. After changing source, rebuild with:
+
+```sh
+sh /work/public/develop.sh build
+```
+
+Run the supplied public checks:
+
+```sh
+sh /work/public/develop.sh check
+```
+
+The command is defined in `/work/public/develop.sh`; use its interpreter and environment settings when running individual tests. Missing implementations can fail public tests until completed.
+
+For longer runs, use `sh /work/public/develop.sh build-background` or `sh /work/public/develop.sh check-background`, then `sh /work/public/develop.sh job-status`. The status includes the complete log path and the exit code when finished.
+
+**Materials**
+
+Paths below are relative to `/work/project`. Local documents describe the pinned project version; the requirements above define the scope of this task.
+
+- `doc/pyproject_toml.rst` — Local documentation: pyproject toml.
+- `doc/reproducible.rst` — Local documentation: reproducible.
+- `flit_core/tests_core` — Public tests and fixtures: tests core.
+
+Submit changes in `/work/project`. Final evaluation uses a fresh copy of your source.
 
 </details>
 
@@ -197,6 +223,20 @@ outputs/preschool-react/
 
 **Next steps:** [Full walkthrough →](docs/getting-started.md) · [Try a software task →](docs/getting-started.md#try-a-software-task)
 
+## 📊 Results
+
+Paper results on all 48 test tasks. PS measures partial progress; RR measures complete resolution. Both are percentages.
+
+| System | DeepSeek-Flash PS | RR | GPT-6-Luna PS | RR |
+| --- | ---: | ---: | ---: | ---: |
+| ReAct | 21.88 | 6.25 | 17.74 | 4.17 |
+| AOrchestra | 5.95 | 0.00 | 5.37 | 0.00 |
+| Magentic-One | 7.59 | 0.00 | 6.50 | 0.00 |
+| Meta-Team | 23.88 | 4.17 | 22.63 | 6.25 |
+| Superagent | 7.72 | 0.00 | 9.66 | 2.08 |
+
+[Evaluation protocol](docs/evaluation.md#paper-evaluation)
+
 <a id="evaluate-your-agent"></a>
 
 ## 🤖 Evaluate Your Agent
@@ -218,7 +258,7 @@ python examples/minimal_agent.py \
   --task-id op26_service_administration_007 --out outputs/my-agent
 ```
 
-The [integration guide](docs/agents.md) walks through the example and explains team execution. Adapters for **ReAct, AOrchestra, Magentic-One and Meta-Team** are included; see [baseline setup](docs/evaluation.md#run-the-included-baselines).
+The [integration guide](docs/agents.md) walks through the example and explains team execution. Adapters for **ReAct, AOrchestra, Magentic-One, Meta-Team and Superagent** are included; see [baseline setup](docs/evaluation.md#run-the-included-baselines).
 
 <a id="documentation"></a>
 

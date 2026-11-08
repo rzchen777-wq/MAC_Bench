@@ -32,9 +32,29 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build evaluation client
         run: docker build -f docker/Dockerfile -t mac-bench:ci .
+      - name: Build Superagent client and verify native dependencies
+        run: docker build --target superagent -f docker/Dockerfile -t mac-bench:superagent-ci .
       - name: Check packaged commands and dataset configuration
         run: |
           docker run --rm mac-bench:ci doctor
           docker run --rm mac-bench:ci tasks list --split dev --json
           docker run --rm mac-bench:ci data download --help
-          docker run --rm --entrypoint python mac-bench:ci -c 'import json; from pathlib import Path; r = json.loads(Path("data/distribution.json").read_text()); assert r["repo_id"] == "sihuichuibuqi/MAC-Bench"; assert r["revision"] == "v1.0"'
+          docker run --rm --entrypoint python mac-bench:ci -c 'import json; from pathlib import Path; r = json.loads(Path("data/distribution.json").read_text()); assert r["repo_id"] == "sihuichuibuqi/MAC-Bench"; assert r["revision"] == "main"'
+
+  superagent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - run: npm install --global pnpm@11.7.0
+      - run: python -m pip install -e '.[dev,agents,superagent]'
+      - run: pnpm --dir src/mac_bench/baselines/superagent install --frozen-lockfile
+      - run: pnpm --dir src/mac_bench/baselines/superagent typecheck
+      - run: pnpm --dir src/mac_bench/baselines/superagent test
+      - run: pytest --run-superagent -m superagent

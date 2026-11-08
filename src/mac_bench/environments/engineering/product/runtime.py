@@ -10,26 +10,13 @@ from pathlib import Path
 
 from .artifacts import fingerprint, write_json
 from .verifier import score_product
-from .infrastructure import load_override
 from ..public_workspace import initialization_commands
 
 
 def modal_backend(directory, timeout=7200):
     from mac_bench.runtime.sandbox.modal import ModalSandboxBackend
-    # A frozen infrastructure image retains its provider application scope.
-    # New constructions use the current default application instead.
-    directory = Path(directory)
-    applications = set()
-    if directory.is_dir():
-        for path in directory.glob('*.json'):
-            receipt = json.loads(path.read_text())
-            if receipt.get('image_id') and receipt.get('app_name'):
-                applications.add(receipt['app_name'])
-    if len(applications) > 1:
-        raise ValueError('Snapshot receipts span multiple provider applications')
-    options = {'app_name': next(iter(applications))} if applications else {}
     return ModalSandboxBackend(timeout=timeout, cpu=4, memory_mib=8192,
-                               snapshot_directory=directory, **options)
+                               snapshot_directory=Path(directory))
 
 
 class ProductRuntime:
@@ -230,53 +217,56 @@ def dependency_cache(environment):
     from mac_bench.runtime.paths import repository_root
     recipe={'image': environment['image'], 'setup': environment['setup']}
     if environment.get('dependency_contents'):
-        recipe.update(dependency_setup=environment['dependency_setup'],dependency_contents=environment['dependency_contents'])
+        recipe.update(dependency_setup=environment['dependency_setup'],
+                      dependency_contents=environment['dependency_contents'],
+                      dependency_preparation='single-sandbox')
     key = fingerprint(recipe)
     root = Path(os.environ.get('MAC_BENCH_ENVIRONMENT_CACHE', repository_root()/'.cache/environments'))
     return root / key, 'mac-bench-base-' + key
 
 
-def prepare_environment(environment, run):
-    """Cache dependency setup once; tasks load their own source and initialization."""
+def prepare_environment(environment, run, *, rebuild=False):
+    """Prepare one dependency snapshot, then pin its receipt to this run."""
     import fcntl
+    import os
     import shutil
+    import tempfile
     cache, name = dependency_cache(environment)
     cache.mkdir(parents=True, exist_ok=True)
-    with (cache/'prepare.lock').open('a') as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        runtime = ProductRuntime(environment, cache / 'environment')
-        if not runtime.backend.snapshot_exists(name=name):
-            try:
-                if environment.get('dependency_contents'):
-                    parent_environment={k:v for k,v in environment.items()
-                                        if k not in {'dependency_files','dependency_contents','dependency_setup'}}
-                    parent=prepare_environment(parent_environment,cache/'base')
-                    provider=cache/'environment/provider'
-                    provider.mkdir(parents=True,exist_ok=True)
-                    for receipt in (cache/'base/environment/provider').glob('*.json'):
-                        shutil.copyfile(receipt,provider/receipt.name)
-                    runtime.open(snapshot=parent)
-                    runtime.backend.write_files(runtime.sandbox,files={
-                        '/opt/mac-bench-dependencies/'+name:content.encode()
-                        for name,content in environment['dependency_contents'].items()})
-                    result=runtime.command('dependencies',environment['dependency_setup'],
-                                           timeout=environment.get('setup_timeout',1800))
-                else:
+    receipt_name = sha256(name.encode()).hexdigest() + '.json'
+    receipt = cache / 'environment/provider' / receipt_name
+    with (cache / 'prepare.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if rebuild or not receipt.is_file():
+            # Prepare independently so a failed rebuild leaves the usable cache
+            # intact. No intermediate snapshot is captured or restored.
+            with tempfile.TemporaryDirectory(prefix='prepare-', dir=cache) as temporary:
+                runtime = ProductRuntime(environment, Path(temporary))
+                try:
                     runtime.open()
                     result = runtime.command('setup', environment['setup'],
                                              timeout=environment.get('setup_timeout', 1800))
-                if result.exit_code:
-                    raise RuntimeError('Dependency setup failed; inspect ' + str(cache/'environment/commands'))
-                runtime.backend.create_snapshot(runtime.sandbox, name=name, timeout=600)
-            finally:
-                runtime.close()
+                    if result.exit_code:
+                        raise RuntimeError('Dependency setup failed: ' + result.stdout[-4000:])
+                    if environment.get('dependency_contents'):
+                        runtime.backend.write_files(runtime.sandbox, files={
+                            '/opt/mac-bench-dependencies/' + filename: content.encode()
+                            for filename, content in environment['dependency_contents'].items()})
+                        result = runtime.command('dependencies', environment['dependency_setup'],
+                                                 timeout=environment.get('setup_timeout', 1800))
+                        if result.exit_code:
+                            raise RuntimeError('Locked dependency setup failed: ' + result.stdout[-4000:])
+                    runtime.backend.create_snapshot(runtime.sandbox, name=name, timeout=600)
+                finally:
+                    runtime.close()
+                receipt.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(Path(temporary) / 'provider' / receipt_name, receipt)
         provider = Path(run) / 'environment/provider'
         provider.mkdir(parents=True, exist_ok=True)
-        for receipt in (cache/'environment/provider').glob('*.json'):
-            target = provider/receipt.name
-            if target.resolve() != receipt.resolve():
-                shutil.copyfile(receipt, target)
-    write_json(Path(run)/'environment/environment.json', {'snapshot':name, 'cache':str(cache)})
+        target = provider / receipt_name
+        if target.resolve() != receipt.resolve():
+            shutil.copyfile(receipt, target)
+    write_json(Path(run) / 'environment/environment.json', {'snapshot': name, 'cache': str(cache)})
     return name
 
 
@@ -294,7 +284,6 @@ class LoadedProductWorld:
         self.meta = meta
         self.directory = Path(directory)
         self.environment = read_environment(self.bundle.root)
-        self._sealed_environment = dict(self.environment)
         self.contract = json.loads((self.bundle.root / "private/contract.json").read_text())
         self.runtime = self.runtime_type(self.environment, self.directory / "agent", backend=backend)
 
@@ -303,51 +292,27 @@ class LoadedProductWorld:
             raise RuntimeError("Product world is already open")
         import os
         rebuild_environment = rebuild_environment or os.environ.get('MAC_BENCH_REBUILD_ENVIRONMENT') == '1'
-        cached = self.meta.get("initial_snapshot")
-        prepared, prepared_name = dependency_cache(self.environment)
-        prepared_provider = prepared/'environment/provider'
-        prepared_receipt = prepared_provider/(sha256(prepared_name.encode()).hexdigest()+'.json')
-        override = load_override(self.bundle, self._sealed_environment)
-        if override is not None:
-            if rebuild_environment:
-                raise ValueError('Cannot combine dependency infrastructure override with rebuilding')
-            self.snapshot = override['snapshot']
-            self.provider_directory = Path(override['provider_directory'])
-            self.environment = {**self.environment, 'build': override['build']}
-            self.runtime.environment = self.environment
-            write_json(self.directory / 'infrastructure_override.json', override)
-        elif prepared_receipt.is_file() and not rebuild_environment:
-            self.provider_directory = prepared_provider
-            self.snapshot = prepared_name
-        elif cached and not rebuild_environment:
-            # This sealed image contains infrastructure only; reference code was never uploaded.
-            self.provider_directory = self.bundle.root / "private/provider"
-            self.snapshot = cached
-        else:
-            # Explicit portable route when the provider image is unavailable/on another account.
-            self.snapshot = prepare_environment(self.environment, self.directory)
-            self.provider_directory = self.directory / "environment/provider"
+        self.snapshot = prepare_environment(self.environment, self.directory,
+                                            rebuild=rebuild_environment)
+        self.provider_directory = self.directory / 'environment/provider'
         self.runtime.backend = modal_backend(self.provider_directory)
         try:
             # All dependencies are in the infrastructure snapshot. Candidate
             # code must not retrieve the removed implementation from upstream.
             self.runtime.open(snapshot=self.snapshot, network_blocked=True)
             self.runtime.install_source(self.bundle.root / self.meta["workspace_archive"])
-            public_names = self.bundle.manifest['public_files']
-            for name in public_names:
-                self.runtime.backend.write_file(self.runtime.sandbox, path='/work/' + name,
-                                                content=(self.bundle.root / name).read_bytes())
+            files = {'/work/' + name: (self.bundle.root / name).read_bytes()
+                     for name in self.bundle.manifest['public_files']}
+            files['/work/TASK.md'] = (self.bundle.root / 'public/task.txt').read_bytes()
             if fixture := self.meta.get("fixture_archive"):
-                self.runtime.backend.write_file(self.runtime.sandbox, path="/work/fixtures.tar",
-                                                content=(self.bundle.root / fixture).read_bytes())
+                files['/work/fixtures.tar'] = (self.bundle.root / fixture).read_bytes()
+            self.runtime.backend.write_files(self.runtime.sandbox, files=files)
             result = self.runtime.command(
                 "initialize-public-workspace",
                 initialization_commands(self.environment, self.meta),
                 timeout=self.environment.get('build_timeout', 1800))
             if result.exit_code:
                 raise RuntimeError("Cannot initialize public candidate workspace; inspect initialization log")
-            task = (self.bundle.root / 'public/task.txt').read_text()
-            self.runtime.backend.write_file(self.runtime.sandbox, path="/work/TASK.md", content=task.encode())
             return self
         except BaseException:
             self.close()

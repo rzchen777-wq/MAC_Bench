@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mac-bench"
-version = "1.0.0"
+version = "1.2.0"
 description = "MAC-Bench: multi-agent collaboration tasks and evaluation"
 readme = "README.md"
 license = "MIT"
@@ -32,6 +32,7 @@ modal = ["modal[api-proxy-support]>=1.5"]
 meta_team = ["aiohttp>=3.9", "duckduckgo-search>=6", "docker>=7"]
 aorchestra = ["pydantic>=2,<3", "openai>=1"]
 magentic_one = ["autogen-core==0.7.5", "autogen-agentchat==0.7.5", "autogen-ext==0.7.5", "markitdown==0.1.3"]
+superagent = ["httpx>=0.27,<1", "litellm>=1.92,<1.93"]
 dev = ["pytest>=8", "pyarrow>=14"]
 
 [project.scripts]
@@ -40,13 +41,15 @@ mac-bench = "mac_bench.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["mac_bench*"]
-exclude = ["artifacts*", "collaboration*", "third_party*", "runs*", "evolution*", "shared*", "tests*", "build*", ".*"]
+exclude = ["artifacts*", "collaboration*", "third_party*", "runs*", "evolution*", "shared*", "tests*", "build*", ".*", "mac_bench.baselines.superagent.node_modules*"]
 
 [tool.setuptools.package-data]
+"mac_bench.baselines.superagent" = ["*.ts", "*.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "prompts/*.md", "patches/*.patch"]
 "mac_bench.environments.packaging" = ["*.txt", "*.md"]
+"mac_bench.evaluation.tasks" = ["*.md"]
 "*" = ["prompts/*.txt", "prompts/*.json", "prompts/*/*.txt", "prompts/*/*.json", "README.txt", "assets/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 tmp_path_retention_policy = "failed"
-markers = ["baselines: native baseline integration using pinned external dependencies"]
+markers = ["superagent: native Superagent integration using Node and DSH", "baselines: native baseline integration using pinned external dependencies"]

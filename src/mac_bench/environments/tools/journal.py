@@ -53,13 +53,25 @@ class CallJournal:
         """Only this actor's saved public receipt, never another actor or arguments."""
         with self.lock:
             row = self.db.execute(
-                'SELECT result, started FROM tool_calls WHERE world=? AND actor=? AND role=? AND call_id=?',
+                'SELECT result, finished FROM tool_calls WHERE world=? AND actor=? AND role=? AND call_id=?',
                 (world, actor, role, call_id)).fetchone()
             if not row:
                 raise ToolError('result_unavailable', 'No saved result is accessible under this ID in this session.')
             if row[0] is None:
                 raise ToolError('result_unfinished', 'This call has no final receipt. Inspect native state; do not repeat an uncertain write.')
             return json.loads(row[0]), row[1]
+
+    def find_request(self, world, actor, role, request_id):
+        """Resolve an actor's request ID without beginning or repeating a call."""
+        with self.lock:
+            row = self.db.execute(
+                'SELECT call_id FROM tool_calls WHERE world=? AND actor=? AND role=? AND request_id=?',
+                (world, actor, role, request_id)).fetchone()
+            if row is None:
+                raise ToolError('request_not_recorded',
+                    'No receipt is currently recorded for this request_id in this session. '
+                    'A request still in transit may arrive later; this lookup did not execute anything.')
+            return row[0]
 
     def records(self, world):
         """Maintainer interface; never registered as an agent tool."""

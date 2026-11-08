@@ -47,7 +47,7 @@ Task materials
 
 Use public/materials.json to find the original business evidence by subject or business reference. It links to commission, workforce, centre-and-programme and family dossiers in public/business_materials.md and their Twenty notes. They connect existing evidence; all original source notes remain present and protected.
 
-Twenty notes titled BPPA SOURCE ... contain signed applications, evidence, appeals, programme details and family contacts. Pretix holds free place reservations; Twenty holds induction calendars; HRMS holds officers' qualifications, leave and duties. Use public/records.json and the identity maps to locate records. Full admissions conditions and seven register formats are in public/business_policy.md and public/recording.md.
+Twenty notes titled BPPA SOURCE ... contain signed applications, evidence, appeals, programme details and family contacts. Pretix holds free place reservations; Twenty holds induction calendars; HRMS holds officers' qualifications, leave and duties. Use public/records.json to locate records. Full admissions conditions and seven register formats are in public/business_policy.md and public/recording.md.
 
 Required outcomes
 
@@ -71,13 +71,15 @@ Supporting parsers, API declarations, documentation and public tests are provide
 <details>
 <summary><strong>Full task instructions</strong></summary>
 
-Complete the release packaging backend
+**Complete the release packaging backend**
 
 Implement the missing release backend in Flit 3.12.0. Application developers
 need this backend to turn Python projects into distributable wheels and source
 archives, then install and run those deliverables in environments that do not
 contain the builder or project checkout. This is the complete flit_core subsystem,
 with five responsibilities rather than a single packaging example.
+
+**Required behavior**
 
 1. Configuration and metadata: read supported legacy and PEP621 pyproject
    metadata; validate options, names, versions, dependencies, optional groups,
@@ -102,9 +104,33 @@ Choose your own implementation; grading checks artifacts in a fresh offline
 consumer with neither flit_core nor the source workspace, not source identity.
 Version normalization and configuration exception declarations must remain usable.
 
-Workspace: /work/project. Python: /opt/engineering/bin/python.
-Set PYTHONPATH=/work/project/flit_core. Public checks:
-/opt/engineering/bin/python -m pytest -q flit_core/tests_core/
+**Development**
+
+Your editable source is `/work/project`. Dependencies and the initial build are prepared before you enter the workspace. After changing source, rebuild with:
+
+```sh
+sh /work/public/develop.sh build
+```
+
+Run the supplied public checks:
+
+```sh
+sh /work/public/develop.sh check
+```
+
+The command is defined in `/work/public/develop.sh`; use its interpreter and environment settings when running individual tests. Missing implementations can fail public tests until completed.
+
+For longer runs, use `sh /work/public/develop.sh build-background` or `sh /work/public/develop.sh check-background`, then `sh /work/public/develop.sh job-status`. The status includes the complete log path and the exit code when finished.
+
+**Materials**
+
+Paths below are relative to `/work/project`. Local documents describe the pinned project version; the requirements above define the scope of this task.
+
+- `doc/pyproject_toml.rst` — Local documentation: pyproject toml.
+- `doc/reproducible.rst` — Local documentation: reproducible.
+- `flit_core/tests_core` — Public tests and fixtures: tests core.
+
+Submit changes in `/work/project`. Final evaluation uses a fresh copy of your source.
 
 </details>
 

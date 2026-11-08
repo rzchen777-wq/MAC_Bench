@@ -1,6 +1,8 @@
 """Verify, import and package the current task data."""
 import argparse
 import json
+import gzip
+import hashlib
 import shutil
 import tarfile
 import tempfile
@@ -37,10 +39,10 @@ def verify_task(path, row):
                        category=row['category'], split=row['split'])
 
 
-def import_task(source, destination, row):
+def import_task(source, destination, row, *, overwrite=False):
     source, destination = Path(source), Path(destination)
     verify_task(source, row)
-    if destination.exists():
+    if destination.exists() and not overwrite:
         verify_task(destination, row)
         return False
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -53,11 +55,19 @@ def import_task(source, destination, row):
             item.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / name, item)
         verify_task(target, row)
-        target.rename(destination)
+        previous = Path(directory) / 'previous'
+        if destination.exists():
+            destination.rename(previous)
+        try:
+            target.rename(destination)
+        except BaseException:
+            if previous.exists():
+                previous.rename(destination)
+            raise
     return True
 
 
-def install_archive(archive_path, destination, row):
+def install_archive(archive_path, destination, row, *, overwrite=False):
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.unpack-', dir=destination.parent) as directory:
@@ -78,7 +88,7 @@ def install_archive(archive_path, destination, row):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     with archive.extractfile(member) as reader, target.open('wb') as writer:
                         shutil.copyfileobj(reader, writer)
-        return import_task(root, destination, row)
+        return import_task(root, destination, row, overwrite=overwrite)
 
 
 def export_task(source, destination, row):
@@ -86,15 +96,48 @@ def export_task(source, destination, row):
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((Path(source) / 'manifest.json').read_text())
-    with tarfile.open(destination, 'w:gz') as archive:
-        for name in ['manifest.json', *sorted(manifest['files'])]:
-            archive.add(Path(source) / name, arcname=name, recursive=False)
+    with destination.open('wb') as raw, gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as packed:
+        with tarfile.open(fileobj=packed, mode='w') as archive:
+            for name in ['manifest.json', *sorted(manifest['files'])]:
+                path = Path(source) / name
+                info = tarfile.TarInfo(name)
+                info.size = path.stat().st_size
+                info.mode = 0o644
+                with path.open('rb') as stream:
+                    archive.addfile(info, stream)
     digest = sha256()
     with destination.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
     return {'task_id': row['task_id'], 'archive': destination.name,
             'sha256': digest.hexdigest(), 'bytes': destination.stat().st_size}
+
+
+def verify_environment_assets(root, row, *, checksums=True, checked=None):
+    """Check the selected task's OCI files; hash shared blobs once per invocation."""
+    from mac_bench.environments.business.runtime import selected_images
+    root = Path(root)
+    config = root / 'data' / row['bundle'] / 'environment/environment.json'
+    if not config.is_file():
+        return 0
+    image_root = root / 'data/environments/images'
+    layout = json.loads((image_root / 'oci-layout').read_text())
+    if layout.get('imageLayoutVersion') != '1.0.0':
+        raise ValueError('Unsupported OCI image layout')
+    tags = {s['image'] for s in json.loads(config.read_text())['services']}
+    _, names = selected_images(image_root, tags)
+    checked = checked if checked is not None else set()
+    for name in names:
+        path = image_root / name
+        if not path.is_file():
+            raise FileNotFoundError('Missing environment file: ' + name)
+        if checksums and path not in checked:
+            with path.open('rb') as stream:
+                actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+            if actual != path.name:
+                raise ValueError('Environment checksum differs: ' + name)
+            checked.add(path)
+    return len(names)
 
 
 def main(argv=None):
@@ -104,15 +147,20 @@ def main(argv=None):
     parser.add_argument('--split', choices=('dev','test'))
     parser.add_argument('--url', help='Use an HTTP mirror downloads.json instead of Hugging Face')
     parser.add_argument('--repo-id', help='Hugging Face dataset repository')
-    parser.add_argument('--revision', help='Dataset tag or commit')
+    parser.add_argument('--revision', help='Dataset branch, tag or commit')
+    parser.add_argument('--overwrite', action='store_true', help='Replace selected installed tasks with the release contents')
     parser.add_argument('--max-workers', type=int, default=4, help='Concurrent Hugging Face downloads (default: 4)')
     parser.add_argument('--source', type=Path, help='A dataset checkout containing data/tasks.json')
     parser.add_argument('--archive', type=Path, help='One task archive')
     parser.add_argument('--out', type=Path, help='Export directory')
     args = parser.parse_args(argv)
+    if args.overwrite and args.command not in {'download', 'import', 'install'}:
+        parser.error('--overwrite is used with download, import or install')
     base, rows = catalog_rows(repository_root(), args.task_id)
     if args.split:
         rows = [row for row in rows if row['split'] == args.split]
+    if not rows:
+        parser.error('No tasks match the selected IDs and split')
     if args.command == 'download':
         if args.max_workers < 1:
             parser.error('--max-workers must be positive')
@@ -120,12 +168,12 @@ def main(argv=None):
             if args.repo_id or args.revision:
                 parser.error('--url cannot be combined with --repo-id or --revision')
             from mac_bench.download import download_tasks
-            download_tasks(repository_root(), args.url, rows)
+            download_tasks(repository_root(), args.url, rows, overwrite=args.overwrite)
         else:
             from mac_bench.download import download_hub_tasks
             release = json.loads((base / 'distribution.json').read_text())
             download_hub_tasks(repository_root(), rows, repo_id=args.repo_id or release['repo_id'],
-                               revision=args.revision or release['revision'], max_workers=args.max_workers)
+                               revision=args.revision or release['revision'], max_workers=args.max_workers, overwrite=args.overwrite)
         return 0
     if args.command == 'import' and args.source is None:
         parser.error('import requires --source')
@@ -138,17 +186,19 @@ def main(argv=None):
         source_base, available = catalog_rows(args.source, args.task_id)
         source_rows = {row['task_id']: row for row in available}
     exports = []
+    checked_assets = set()
     for row in rows:
         destination = base / row['bundle']
         if args.command == 'verify':
             verify_task(destination, row)
+            verify_environment_assets(repository_root(), row, checked=checked_assets)
         elif args.command == 'import':
             origin = source_rows[row['task_id']]
             if any(origin[key] != row[key] for key in ('world_revision','category','split')):
                 raise ValueError('Source task does not match the dataset index')
-            import_task(source_base / origin['bundle'], destination, row)
+            import_task(source_base / origin['bundle'], destination, row, overwrite=args.overwrite)
         elif args.command == 'install':
-            install_archive(args.archive, destination, row)
+            install_archive(args.archive, destination, row, overwrite=args.overwrite)
         else:
             exports.append(export_task(destination, args.out / (row['task_id']+'.tar.gz'), row))
         print('OK', row['task_id'])

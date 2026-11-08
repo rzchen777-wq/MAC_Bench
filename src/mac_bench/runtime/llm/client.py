@@ -124,21 +124,26 @@ def _assistant_content(message: Any, *, finish_reason: str | None) -> str:
 
 
 class LiteLLMChatClient:
-    """ChatClient backed by the shared Meta-Team-style litellm gateway."""
+    """ChatClient backed by the shared LiteLLM gateway."""
 
-    def __init__(self, config: LLMConfig, *, publish_env: bool = True) -> None:
+    def __init__(self, config: LLMConfig, *, publish_env: bool = True, http_client=None) -> None:
         if not config.api_key:
             raise RuntimeError(
                 "An LLM API key is required to create a live client; "
-                "set MAC_BENCH_LLM_API_KEY or OPENAI_API_KEY (or DEV_API_KEY)."
+                "set MAC_BENCH_LLM_API_KEY or OPENAI_API_KEY."
             )
         self._config = config
+        self._http_client = http_client
         if publish_env:
             apply_gateway_env(config)
 
     @property
     def config(self) -> LLMConfig:
         return self._config
+
+    def close(self) -> None:
+        if self._http_client is not None:
+            self._http_client.close()
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -164,6 +169,7 @@ class LiteLLMChatClient:
             thinking_mode=self._config.thinking_mode,
             timeout_seconds=self._config.timeout_seconds,
             max_retries=self._config.max_retries,
+            **({'client': self._http_client} if self._http_client is not None else {}),
         )
         choices = getattr(response, "choices", None) or []
         if not choices:

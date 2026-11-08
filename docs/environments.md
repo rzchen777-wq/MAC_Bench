@@ -23,13 +23,15 @@ The default business VM has **4 CPUs and 8 GiB of memory**. Pretix runs two web 
 
 ## Software engineering
 
-Software tasks have a dependency image and a per-episode source workspace. The loader builds the dependency image, loads starter code and public fixtures, then runs the task's initialization command. Private tests run in a separate grading sandbox.
+Software tasks have a dependency image and a per-episode source workspace. The loader installs base and locked dependencies in one sandbox and saves a single dependency image. It loads starter code and public fixtures, then runs the task's initialization command. Private tests run in a separate grading sandbox.
 
 Prepare an image ahead of evaluation:
 
 ```bash
 mac-bench environment prepare --task-id flit_packages
 ```
+
+Add `--rebuild` to prepare the image again. The cache is replaced after preparation succeeds; running episodes keep their selected image.
 
 Tasks with the same dependency recipe can reuse the cached image while receiving separate workspaces. Local dependency records live in `.cache/environments/`; set `MAC_BENCH_ENVIRONMENT_CACHE` to choose another directory.
 
@@ -58,7 +60,7 @@ This excerpt omits the task identity, digests and runtime details in the full re
 
 ## Lifecycle and resource settings
 
-All workers in an episode share one environment. Independent episodes receive isolated environments. The evaluator closes task and grader sandboxes when an episode finishes or raises an error; prepared images and local output files remain available for reuse or inspection.
+All workers in an episode share one environment. Software command tools share a 6 GiB resident-memory budget across concurrent commands and their subprocesses. If the total exceeds it, the largest command is stopped while the workspace remains available. Independent episodes receive isolated environments. The evaluator closes task and grader sandboxes when an episode finishes or raises an error; prepared images and local output files remain available for reuse or inspection.
 
 | Setting or location | Purpose |
 | --- | --- |

@@ -20,8 +20,9 @@ def query_path(path, query):
     return path + ('?' + urlencode(values) if values else '')
 
 
-def exchange(connection, method, path, body=None):
-    response = connection.transport.request_response(method, path.lstrip('/'), body)
+def exchange(connection, method, path, body=None, *, rate_limit_key=None):
+    options = {'rate_limit_key': rate_limit_key} if rate_limit_key is not None else {}
+    response = connection.transport.request_response(method, path.lstrip('/'), body, **options)
     return NativeResult(response.body, 'accepted' if response.status == 202 else 'succeeded')
 
 

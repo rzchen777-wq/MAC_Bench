@@ -48,6 +48,26 @@ class _ModalProcess:
 APP_NAME = "mac-bench"
 
 
+class _ModalChannel:
+    def __init__(self, process):
+        self.process = process
+
+    def write(self, data):
+        self.process.stdin.write(data)
+        self.process.stdin.drain()
+
+    def read(self):
+        for chunk in self.process.stdout:
+            yield chunk.encode() if isinstance(chunk, str) else bytes(chunk)
+
+    def close(self):
+        self.process.stdin.write_eof()
+        self.process.stdin.drain()
+        code = self.process.wait()
+        if code:
+            raise RuntimeError(f'Sandbox capability worker exited with status {code}')
+
+
 
 
 
@@ -298,11 +318,11 @@ class ModalSandboxBackend(SandboxBackend):
         # limit. Transport large programs as files, then evaluate the exact
         # text in the same login shell with stdin left available to the command.
         if len(command.encode("utf-8")) + 16 >= 65536:
-            command_file = "/tmp/evoteam-exec-" + uuid.uuid4().hex + ".sh"
+            command_file = "/tmp/mac-bench-exec-" + uuid.uuid4().hex + ".sh"
             sandbox.raw.filesystem.write_bytes(command.encode("utf-8"), command_file)
             quoted = shlex.quote(command_file)
-            dispatch = (f"IFS= read -r -d '' evoteam_shell_program < {quoted} || true; "
-                        f"rm -f -- {quoted}; eval \"$evoteam_shell_program\"")
+            dispatch = (f"IFS= read -r -d '' mac_bench_shell_program < {quoted} || true; "
+                        f"rm -f -- {quoted}; eval \"$mac_bench_shell_program\"")
         try:
             process = sandbox.raw.exec("bash", "-lc", dispatch, **exec_kwargs)
             process.wait()
@@ -483,7 +503,7 @@ os.replace(temporary,destination)
         cwd: str,
         tty: bool,
     ) -> BackendProcessHandle:
-        pidfile = f"/tmp/evoteam-process-{session_id}.pid"
+        pidfile = f"/tmp/mac-bench-process-{session_id}.pid"
         script = (
             f"printf '%s\\n' $$ > {shlex.quote(pidfile)}; "
             f"exec bash -lc {shlex.quote(command)}"
@@ -549,6 +569,9 @@ os.replace(temporary,destination)
             target=collect, name=f"modal-process-{session_id}", daemon=True
         ).start()
         return BackendProcessHandle(session_id, state)
+
+    def open_channel(self, sandbox, *, argv, cwd):
+        return _ModalChannel(sandbox.raw.exec(*argv, workdir=cwd, text=False))
 
     def poll_process(
         self,
@@ -646,7 +669,7 @@ os.replace(temporary,destination)
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
             tar.add(local_dir, arcname=".")
         payload = buf.getvalue()
-        archive = "/tmp/evoteam-upload.tar.gz"
+        archive = "/tmp/mac-bench-upload.tar.gz"
         self.write_file(sandbox, path=archive, content=payload)
         result = self.exec(
             sandbox,

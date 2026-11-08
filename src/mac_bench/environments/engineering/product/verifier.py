@@ -15,8 +15,18 @@ def candidate_collection_failure(check):
         return check
     collecting = re.search(r'ERROR collecting |(?m:^ERROR tests/)', details)
     candidate_frame = re.search(r'(?m)^/work/project/[^\n:]+\.py:\d+: in |^E\s+File "/work/project/[^"\n]+\.py", line \d+', details)
-    programming_error = re.search(r'(?m)^E\s+(AttributeError|TypeError|SyntaxError|IndentationError|NameError|UnboundLocalError|NotImplementedError):', details)
-    if collecting and candidate_frame and programming_error:
+    # Pytest prints application exceptions with their qualified class name.
+    # Inspect every reported exception: a candidate error must not hide a
+    # missing dependency or an unrelated harness error in the same collection.
+    exceptions = re.findall(r'(?m)^E\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*):', details)
+    programming_errors = {'AttributeError', 'TypeError', 'SyntaxError',
+                          'IndentationError', 'NameError', 'UnboundLocalError',
+                          'NotImplementedError'}
+    graphql_parser = re.search(r'(?m)^/work/project/[^\n:]*graphql/language/parser\.py:\d+: in ', details)
+    def candidate_exception(name):
+        return name in programming_errors or (bool(graphql_parser) and name in {
+            'GraphQLSyntaxError', 'graphql.error.syntax_error.GraphQLSyntaxError'})
+    if collecting and candidate_frame and exceptions and all(map(candidate_exception, exceptions)):
         return {**check, 'status': 'failed', 'original_status': 'harness_error',
                 'classification': 'candidate_python_exception_during_test_collection'}
     return check

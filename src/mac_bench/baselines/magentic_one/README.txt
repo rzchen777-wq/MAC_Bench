@@ -52,19 +52,18 @@ normal completion. Interrupted runs retain incremental messages, ledgers and the
 common raw model/tool/context archives even without a final native state file.
 Coordinator self-reported completion is only a termination signal, not a score.
 
-Install/acquire
-pip install -e '.[magentic_one]'
-git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/autogen.git external/baselines/Magentic-One
-git -C external/baselines/Magentic-One sparse-checkout set python/packages/autogen-core python/packages/autogen-agentchat python/packages/autogen-ext
-Check out source.revision from the YAML (fetch that revision first if necessary).
-The clone is an ignored acquired dependency; source and prompt hashes are recorded.
-AutoGen core/agentchat/ext metadata must be version 0.7.5. No embedding service
-or cross-task training asset is needed by this adaptation.
+Install and run from the repository root
+python scripts/fetch_baselines.py --name Magentic-One
+pip install -e '.[modal,agents,magentic_one]'
+mac-bench data download --task-id op26_service_administration_007
+mac-bench evaluate --task-id op26_service_administration_007 \
+  --method magentic_one --repetitions 1 \
+  --max-tokens 1000000 --max-model-calls 80 \
+  --max-tool-calls 160 --max-seconds 2400 \
+  --out outputs/preschool-magentic-one
 
-Run
-PYTHONPATH=src:. .venv/bin/python -m mac_bench.evaluation \
-  --world PATH_TO_SEALED_WORLD --method magentic_one \
-  --method-config configs/baselines/magentic_one.yaml \
-  --out NEW_RESULT_DIRECTORY --repetitions 1
-Choose llm.base_url/model_name/api_key_env and limits/context_policy in the YAML.
-The independent evaluator owns grading and closes Modal resources after execution.
+The fetch script installs the pinned source under .cache/baselines/Magentic-One.
+AutoGen core/agentchat/ext use version 0.7.5. Configure Modal and model access as
+described in docs/getting-started.md. To change method settings, pass
+--method-config with a copy of configs/baselines/magentic_one.yaml.
+The evaluator owns grading and closes Modal resources after execution.

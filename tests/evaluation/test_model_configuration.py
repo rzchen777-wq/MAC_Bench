@@ -86,3 +86,12 @@ def test_embedding_dimension_drift_is_visible(monkeypatch):
     with pytest.raises(ValueError,match='dimensions'):
         client.encode(['a','b'])
 
+
+
+def test_embedding_uses_current_configuration_namespace():
+    config = EmbeddingConfig.from_mapping({}, environ={
+        'MAC_BENCH_EMBEDDING_BASE_URL': 'https://embedding.example/v1',
+        'MAC_BENCH_EMBEDDING_MODEL': 'vector',
+        'MAC_BENCH_EMBEDDING_API_KEY': 'fixture-key'})
+    assert config.base_url == 'https://embedding.example/v1'
+    assert config.model_name == 'vector' and config.api_key == 'fixture-key'

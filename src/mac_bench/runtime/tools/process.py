@@ -74,7 +74,7 @@ class ProcessManager:
             raise ValueError("process retention must be non-negative and capacity positive")
         self._sessions: dict[str, ProcessSession] = {}
         self._lock = threading.RLock()
-        self._logs = tempfile.TemporaryDirectory(prefix="evoteam-process-logs-")
+        self._logs = tempfile.TemporaryDirectory(prefix="mac-bench-process-logs-")
         self.retention_seconds = float(retention_seconds)
         self.max_sessions_per_scope = int(max_sessions_per_scope)
 

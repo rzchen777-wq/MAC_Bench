@@ -95,7 +95,6 @@ def upload_file(sandbox, source, target):
     sandbox.raw.filesystem.copy_from_local(source, target)
 
 
-PREFIX = ('environments',)
 RUNTIME_DIRECTORIES = {"apps", "catalog", "tools", "verification", "runtime", "packaging", "business"}
 PACKAGE_FILES = {"__init__.py", "runtime/__init__.py", 'environments/__init__.py', 'environments/errors.py'}
 
@@ -104,21 +103,14 @@ def runtime_source():
     root = Path(__file__).parents[2]
     stream = io.BytesIO()
     with tarfile.open(fileobj=stream, mode="w:gz") as archive:
-        for file in sorted(root.rglob("*")):
-            relative = file.relative_to(root)
-            parts = relative.parts
-            included = (
-                relative.as_posix() in PACKAGE_FILES
-                or relative.as_posix().startswith("runtime/common/")
-                or (parts[:len(PREFIX)] == PREFIX and len(parts) > len(PREFIX)
-                    and parts[len(PREFIX)] in RUNTIME_DIRECTORIES)
-            )
-            if (
-                included and file.is_file()
-                and "__pycache__" not in file.parts
-                and file.suffix in {".py", ".json", ".txt"}
-            ):
-                archive.add(file, arcname="mac_bench/" + str(file.relative_to(root)))
+        candidates = {root / name for name in PACKAGE_FILES}
+        for directory in [root / 'runtime/common',
+                          *(root / 'environments' / name for name in RUNTIME_DIRECTORIES)]:
+            candidates.update(directory.rglob('*'))
+        for file in sorted(candidates):
+            if (file.is_file() and '__pycache__' not in file.parts
+                    and file.suffix in {'.py', '.json', '.txt'}):
+                archive.add(file, arcname='mac_bench/' + file.relative_to(root).as_posix())
     return stream.getvalue()
 
 
@@ -142,6 +134,10 @@ class PortableBusinessWorld:
         self.image_index, self.image_blobs = selected_images(
             image_root, {service["image"] for service in self.environment["services"]}
         )
+        missing = [name for name in self.image_blobs if not (image_root / name).is_file()]
+        if missing:
+            raise FileNotFoundError('Missing task environment files; run mac-bench data download --task-id '
+                                    + bundle.manifest['world_id'])
         images = sorted(entry["digest"] for entry in self.image_index["manifests"])
         # Cache the application state, not the task wording or outcome checks.
         environment_files = {
@@ -231,9 +227,7 @@ class PortableBusinessWorld:
                 if not file.is_file() or file.relative_to(root).parts[0] in {"images", "runtime"}:
                     continue
                 rel = file.relative_to(root)
-                if rel.parts[0] == "runtime":
-                    target = Path("/work/world").joinpath(*rel.parts[1:])
-                elif rel.parts[0] == "host":
+                if rel.parts[0] == "host":
                     target = Path("/work").joinpath(*rel.parts[1:])
                 else:
                     target = Path("/work/environment") / rel

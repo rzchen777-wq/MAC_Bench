@@ -2,6 +2,7 @@
 import json
 import shlex
 import inspect
+import re
 
 
 def _paused_procfile(content):
@@ -28,24 +29,6 @@ print(json.dumps({'policy':'hrms_periodic_scheduler_paused_v1','container':'runt
 '''
 
 
-def pause_periodic_hrms(backend, sandbox, spec):
-    """Apply after immutable storage restore, before starting any app process.
-
-    Only the periodic scheduler is omitted. Workers still process explicit
-    business operations. No database rows, native API code or sealed files
-    change. Every restore reapplies the same recorded ephemeral process policy.
-    """
-    if 'runtime-hrms' not in spec.get('containers', ()):
-        return None
-    result = backend.exec(sandbox, shlex.join(['python3', '-c', _PAUSE]), timeout=60)
-    if result.exit_code:
-        raise RuntimeError('Could not pause periodic HRMS housekeeping before resume')
-    receipt = json.loads(result.stdout)
-    if receipt.get('policy') != 'hrms_periodic_scheduler_paused_v1':
-        raise RuntimeError('Invalid HRMS process policy receipt')
-    return receipt
-
-
 def _bounded_pretix(content):
     """Size preinitialized Pretix for tool traffic, not the host CPU count."""
     text = content.decode()
@@ -56,13 +39,23 @@ def _bounded_pretix(content):
             'exec celery -A pretix.celery_app worker -l info --concurrency=2 "$@"',
     }
     for before, after in replacements.items():
-        if text.count(before) != 1:
+        lines = [line.strip() for line in text.splitlines()]
+        if lines.count(before) + lines.count(after) != 1:
             raise RuntimeError('Pretix runtime configuration differs from prepared image')
         text = text.replace(before, after)
     return text.encode()
 
 
-_PRETIX = 'import json,pathlib,re,subprocess\n' + inspect.getsource(_bounded_pretix) + r'''
+def _bounded_nginx(content):
+    text, count = re.subn(r'(?m)^worker_processes\s+(?:auto|1);[ \t]*$',
+                         'worker_processes 1;', content.decode())
+    if count != 1:
+        raise RuntimeError('Pretix nginx worker configuration differs')
+    return text.encode()
+
+
+_PRETIX = ('import json,pathlib,re,subprocess\n' + inspect.getsource(_bounded_pretix)
+           + '\n' + inspect.getsource(_bounded_nginx)) + r'''
 root=pathlib.Path('/work/pretix-process-config');root.mkdir(exist_ok=True)
 for remote,local in [('/usr/local/bin/pretix','pretix'),('/etc/nginx/nginx.conf','nginx.conf')]:
     path=root/local
@@ -70,22 +63,10 @@ for remote,local in [('/usr/local/bin/pretix','pretix'),('/etc/nginx/nginx.conf'
     if local=='pretix':
         path.write_bytes(_bounded_pretix(path.read_bytes()))
     else:
-        content,count=re.subn(r'(?m)^worker_processes\s+auto;', 'worker_processes 1;',path.read_text())
-        if count!=1:raise RuntimeError('Pretix nginx worker configuration differs')
-        path.write_text(content)
+        path.write_bytes(_bounded_nginx(path.read_bytes()))
     subprocess.run(['docker','cp',str(path),'m6-pretix:'+remote],check=True,capture_output=True)
 print(json.dumps({'policy':'pretix_api_processes','web_workers':2,'task_workers':2,'nginx_workers':1,'schema':'prepared'}))
 '''
-
-
-def configure_pretix_processes(backend, sandbox, spec):
-    """Apply to restored, stopped containers with an initialized database."""
-    if 'm6-pretix' not in spec.get('containers', ()):
-        return None
-    result=backend.exec(sandbox,shlex.join(['python3','-c',_PRETIX]),timeout=60)
-    if result.exit_code:
-        raise RuntimeError('Could not configure Pretix API processes')
-    return json.loads(result.stdout)
 
 
 _HRMS_SHIFT_POLICY = r'''

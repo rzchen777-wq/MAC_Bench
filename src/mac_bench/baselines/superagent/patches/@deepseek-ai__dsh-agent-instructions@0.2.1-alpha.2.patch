@@ -1,0 +1,30 @@
+diff --git a/lib/index.js b/lib/index.js
+index abb11091d1ebbc86e69654535bfaa265bb75747b..25a9af46b4a07c2e20874f42e8248c23c4c97310 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1231,7 +1231,7 @@ function apply(ctx, config) {
+ 	}, "agent-instructions.projectionLifecycle");
+ 	const projectionTails = /* @__PURE__ */ new WeakMap();
+ 	const stepTouches = /* @__PURE__ */ new WeakMap();
+-	const compose = async (agent, signal, claimed, pending, touchedPaths = []) => {
++	const composeContents = async (agent, signal, claimed, pending, touchedPaths = []) => {
+ 		signal.throwIfAborted();
+ 		if (resolved.maxBytes <= 0 || !Number.isFinite(resolved.maxBytes)) return;
+ 		const fileSystem = ctx.get("fs");
+@@ -1363,6 +1363,16 @@ function apply(ctx, config) {
+ 		else agent.inbox.replace(replaced.id, desired);
+ 		for (const message of pending.slice(1)) agent.inbox.remove(message.id);
+ 	};
++	// Remote filesystem providers may batch metadata within one refresh. Keep
++	// the same discovery, version checks and instruction projection semantics.
++	const compose = (agent, signal, claimed, pending, touchedPaths = []) => {
++		const fs = ctx.get("fs");
++		const refresh = () => composeContents(agent, signal, claimed, pending, touchedPaths);
++		return typeof fs?.withInstructionSnapshot === "function"
++			? fs.withInstructionSnapshot({ agent_id: agent.id,
++				refresh_phase: touchedPaths.length ? "file_touch" : "pre_step" }, refresh)
++			: refresh();
++	};
+ 	const composeAndSync = async (agent, signal, claimed, touchedPaths = []) => {
+ 		const desired = await compose(agent, signal, claimed, agent.inbox.nextStep.filter(isAgentInstructionsMessage), touchedPaths);
+ 		signal.throwIfAborted();

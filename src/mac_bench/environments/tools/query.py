@@ -87,7 +87,8 @@ def _matches(row, condition):
 
 
 def query_document(document, *, identity, path='', keys=None, query='', fields=None,
-                   where=None, sort=None, aggregates=None, cursor=None, limit=50):
+                   where=None, sort=None, aggregates=None, cursor=None, limit=50,
+                   context_provider=None):
     validate(object_schema(QUERY_PROPERTIES), {k: v for k, v in dict(path=path, keys=keys, query=query,
         fields=fields, where=where, sort=sort, aggregates=aggregates, cursor=cursor, limit=limit).items()
         if v is not None})
@@ -182,10 +183,17 @@ def query_document(document, *, identity, path='', keys=None, query='', fields=N
             if absent:
                 row['missing_fields'] = absent
         candidate = {**response, 'rows': [*response['rows'], row], 'next_cursor': continuation(end + 1)}
+        if context_provider and (context := context_provider(value, row_path)):
+            context_id, detail = context
+            row['context'] = context_id
+            candidate['contexts'] = {**response.get('contexts', {}), context_id: detail}
         if len(encoded(candidate).encode()) > PAGE_BYTES:
             if not response['rows']:
                 raise ToolError('query_row_too_large', 'Select fewer fields; recover long values with their exact paths.')
             break
-        response['rows'].append(row); end += 1
+        response['rows'].append(row)
+        if 'contexts' in candidate:
+            response['contexts'] = candidate['contexts']
+        end += 1
     response['next_cursor'] = continuation(end) if end < len(matched) else None
     return response

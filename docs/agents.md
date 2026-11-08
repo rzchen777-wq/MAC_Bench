@@ -76,6 +76,18 @@ finally:
 
 Enter `call_scope` inside each worker thread or asynchronous task. It associates that worker's calls with its identity. Team delegation and communication remain part of your system.
 
+## Work with business records
+
+Use `public/records.json` to locate initial records, then read their current values through the application tools. In `public/facts.json`, projected rows retain links to their source sections and conditions. Follow result cursors to read all pages; application pagination and saved-result pagination are separate.
+
+`describe_tool` distinguishes list pages, document details and write confirmations. Financial write cards give the document ID and the operation for reading its current amounts. HRMS `docstatus` means draft, submitted or cancelled; it is separate from a business field named `status`. Calendar tools report the event and its relationships; reservations and staffing remain separate application records.
+
+Pretix refund actions have distinct effects: `create` records a refund, `done` records completion, `process` acknowledges an external refund, and `order_payment.refund` executes a refund through the payment provider. Read the operation card for required states and effects on the parent order. The `mark_refunded` flag changes the order lifecycle; it does not itself transfer money. Use returned payment/refund states to check completion.
+
+Give every independent application call a fresh `request_id`, including reads and calls from different workers. If a reply is lost, `read_result(request_id=original_id, path="")` retrieves its saved receipt. Check the receipt status and current record before deciding on another write. Calls to different applications can overlap; operations in the same application are serialized.
+
+Adapters that use scripts can request a shared workspace with `context.open_execution()`. On business tasks, this creates a separate small sandbox containing the public files. Start an attributed process with `execution.call('process.spawn', arguments, public_tools=True)` inside `call_scope`; its Python scripts can use `from mac_tools import call, load_result`. These calls use the same public tools, return the same receipts, and count toward the same episode budget. Workers share workspace files and application state. The [script guide](../src/mac_bench/evaluation/tasks/public_tools.md) covers discovery, complete results and handovers; the [execution interface](../src/mac_bench/evaluation/tasks/execution.py) defines process and file operations.
+
 ## Context reference
 
 | Attribute | Use |
@@ -84,6 +96,7 @@ Enter `call_scope` inside each worker thread or asynchronous task. It associates
 | `task.interaction_instructions` | Instructions for using the environment |
 | `task.tools` | Tools with names, descriptions and JSON argument schemas |
 | `environment.call(name, arguments)` | Execute a tool and receive its structured result |
+| `open_execution()` | Open the team’s shared file and process workspace |
 | `client.complete(messages, ...)` | Make a recorded model request |
 | `budget` | Shared limits and current accounting |
 | `event(payload)` | Append execution events |

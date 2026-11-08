@@ -7,6 +7,7 @@ from mac_bench.evaluation import run_episode, EpisodeBudget, BudgetExceeded
 from mac_bench.evaluation.tasks import task_record,open_task
 from mac_bench.evaluation.tasks.adapters.operational import OperationalTask
 from mac_bench.environments.packaging.bundle import seal_bundle
+from mac_bench.environments.packaging.interface import business_guide
 from mac_bench.runtime.llm.client import ChatMessage,ChatResponse
 from mac_bench.runtime.sandbox.base import CommandResult
 
@@ -34,6 +35,38 @@ def task(tmp_path,world):
 class Client:
     config=SimpleNamespace(model='scripted')
     def complete(self,*args,**kwargs):return ChatResponse(content='ok',model='scripted',usage={'prompt_tokens':10,'completion_tokens':2},finish_reason='stop')
+
+
+def test_cli_sigterm_finishes_episode_and_closes_its_world(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    program = '''
+import os,signal,sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[2])
+from test_episode_runner import CodeWorld,Client,task
+from mac_bench.evaluation import __main__ as cli
+from mac_bench.evaluation.episodes.runner import run_episode
+class Interrupted:
+    name='signal-fixture'
+    def run(self, context):
+        os.kill(os.getpid(), signal.SIGTERM)
+        raise AssertionError('SIGTERM did not stop execution')
+root=Path(sys.argv[1]); world=CodeWorld()
+cli._main=lambda argv: run_episode(task(root,world),Interrupted(),Client(),output=root/'episode',close=True)
+try:
+    cli.main([])
+finally:
+    (root/'closed.txt').write_text(str(world.closed))
+'''
+    process = subprocess.run([sys.executable, '-c', program, str(tmp_path), str(Path(__file__).parent)],
+                             capture_output=True, text=True, timeout=15)
+    assert process.returncode == 143, process.stdout + process.stderr
+    assert (tmp_path / 'closed.txt').read_text() == 'True'
+    result = json.loads((tmp_path / 'episode/result.json').read_text())
+    assert result['closed'] and result['status'] == 'error'
+    assert result['error_type'] == 'SystemExit'
 
 
 def test_truncated_model_response_retains_body_and_counts_usage(tmp_path):
@@ -189,6 +222,7 @@ def test_shared_concurrent_budget_does_not_multiply_by_worker_count():
 def test_same_runner_accepts_operational_adapter(tmp_path):
     root=tmp_path/'bundle';(root/'public').mkdir(parents=True);(root/'private').mkdir()
     (root/'public/task.txt').write_text('Adjust live records.');(root/'private/initial.json').write_text('{"value":0}')
+    (root/'private/agent_instructions.txt').write_text(business_guide(root))
     b=seal_bundle(root,world_id='ops',public_files=['public/task.txt'],metadata={'scenario_family':'business_finance','tool_api_version':2})
     class Session:
         value=0;active=False

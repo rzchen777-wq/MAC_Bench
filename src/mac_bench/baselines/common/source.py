@@ -1,4 +1,4 @@
-"""Scoped vendored imports: upstream generic module names cannot leak to other methods."""
+"""Scoped upstream imports: upstream generic module names cannot leak to other methods."""
 import sys
 import threading
 from contextlib import contextmanager

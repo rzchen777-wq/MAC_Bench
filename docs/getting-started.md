@@ -52,9 +52,18 @@ mac-bench data download --split test   # 48 test tasks
 mac-bench data download                # All 54 tasks
 ```
 
-The code selects the dataset repository and release tag in `data/distribution.json`. Each download resolves that tag to one commit, so packages and environment files come from the same snapshot. Use `--repo-id OWNER/MAC-Bench` or `--revision TAG_OR_COMMIT` to select another location or release. `--max-workers` controls parallel downloads (default: 4).
+The dataset repository and revision are selected in `data/distribution.json`; the default revision is `main`. Each download resolves the selected branch, tag or commit to one commit, so packages and environment files come from the same snapshot. Use `--repo-id OWNER/MAC-Bench` or `--revision BRANCH_TAG_OR_COMMIT` to select another location or revision. `--max-workers` controls parallel downloads (default: 4).
 
 Environment files are stored directly under `data/`, without a second full copy in the download cache. Compressed task packages are cached under `.cache/dataset/packages/`; installed tasks are verified and reused on subsequent downloads. The resolved commit is recorded in `.cache/dataset/release.json`.
+
+To update an existing installation to the release selected by your code checkout, run:
+
+```bash
+mac-bench data download --overwrite
+mac-bench data verify
+```
+
+`--overwrite` replaces the selected task folders after the downloaded packages pass verification. Omit it to preserve local task edits. Shared environment files are reused when their checksums match. Updates also remove superseded image files tracked by the downloader. `data verify` checks task contents and required application images, hashing each shared blob once.
 
 For an independently downloaded software-task package:
 

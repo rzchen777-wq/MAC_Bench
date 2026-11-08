@@ -1,1 +1,1 @@
-"""runtime / infrastructure components for Stage III."""
+"""Application deployment metadata."""

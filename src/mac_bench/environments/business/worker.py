@@ -4,20 +4,9 @@ import argparse
 import json
 import shutil
 import subprocess
-import time
 from pathlib import Path
-from http.client import HTTPException
-from urllib.parse import quote
-from mac_bench.environments.runtime.infrastructure.container_snapshot.engine import (
-    Engine,
-    create_body,
-)
-from mac_bench.environments.runtime.infrastructure.container_snapshot.configuration import (
-    service_order,
-)
-from mac_bench.environments.runtime.infrastructure.container_snapshot.coordinator import (
-    ContainerSnapshots,
-)
+from .containers import Engine, create_body
+from .services import BusinessServices, service_order
 
 
 def load_images(root, config):
@@ -131,14 +120,12 @@ def restore(root, *, start=True):
         subprocess.run(["python3", "-c", _PAUSE], check=True, stdout=subprocess.DEVNULL)
     if "m6-pretix" in names:
         subprocess.run(["python3", "-c", _PRETIX], check=True, stdout=subprocess.DEVNULL)
-    probe = ContainerSnapshots.__new__(ContainerSnapshots)
-    probe.spec = {'readiness': config['readiness'],
-                  'dependencies': config['dependencies'],
-                  'readiness_timeout_seconds': 300}
-    probe.names = ordered
-    probe.engine = engine
-    probe.save = lambda **updates: None
-    probe.start_services({name: engine.inspect(name) for name in ordered})
+    from mac_bench.environments.apps.bigcapital.accounting_patch import _INSTALL
+    if 'runtime-bigcapital' in names:
+        subprocess.run(['python3', '-c', _INSTALL], check=True, stdout=subprocess.DEVNULL)
+    services = BusinessServices(engine, names=ordered, dependencies=config['dependencies'],
+                                readiness=config['readiness'])
+    services.start({name: engine.inspect(name) for name in ordered})
     print(json.dumps({"ready": names}))
 
 

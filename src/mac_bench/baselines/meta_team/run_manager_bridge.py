@@ -1,4 +1,4 @@
-"""Thin wrappers around official Meta-Team RunManager for EvoTeam freeze dirs."""
+"""Thin wrappers around official Meta-Team RunManager for episode configuration directories."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def init_run_at(
         "team_name": team_name,
         "source_team_dir": str(source_team_dir),
         "created_at": _now_iso(),
-        "evoteam_bridge": "mac_bench.baselines.meta_team",
+        "mac_bench_bridge": "mac_bench.baselines.meta_team",
         **(config or {}),
     }
     (run_dir / "config.json").write_text(

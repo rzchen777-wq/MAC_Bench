@@ -46,26 +46,30 @@ class RestTransport:
         self._pace_lock = Lock()
         self.opener = build_opener(_NoRedirect())
 
-    def _pace(self, method):
-        """Space requests per HTTP method before sending; never retry a write.
+    def _pace(self, method, rate_limit_key=None):
+        """Honor a declared endpoint bucket, or the transport's method bucket.
 
-        A single transport should be shared by one application's factories.
-        This conservative opt-in setting also covers distinct endpoint paths.
+        A bucket describes a server handler, never a record ID or query value.
+        Reserving slots under the lock keeps concurrent calls spaced without
+        making unrelated buckets wait on a sleeping caller.
         """
         if not self.min_request_interval:
             return
         with self._pace_lock:
-            delay = self._next_request_at.get(method, 0) - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            self._next_request_at[method] = time.monotonic() + self.min_request_interval
+            key = method, rate_limit_key
+            now = time.monotonic()
+            slot = max(now, self._next_request_at.get(key, now))
+            self._next_request_at[key] = slot + self.min_request_interval
+        if slot > now:
+            time.sleep(slot - now)
 
-    def request(self, method, path, body=None):
-        return self.request_response(method, path, body).body
+    def request(self, method, path, body=None, *, rate_limit_key=None):
+        return self.request_response(method, path, body, rate_limit_key=rate_limit_key).body
 
-    def request_response(self, method, path, body=None):
+    def request_response(self, method, path, body=None, *, rate_limit_key=None):
         return self._exchange(method, path, None if body is None else json.dumps(body, allow_nan=False).encode(),
-                              content_type='application/json', journal_body=body, binary=False)
+                              content_type='application/json', journal_body=body, binary=False,
+                              rate_limit_key=rate_limit_key)
 
     def request_binary(self, method, path):
         return self._exchange(method, path, None, content_type='application/json',
@@ -76,7 +80,7 @@ class RestTransport:
                 or any(c in value for c in ('\r', '\n', '"'))
                 for value in (field, filename, content_type))):
             raise ValueError('invalid multipart file')
-        boundary = 'evoteam-' + uuid4().hex
+        boundary = 'mac-bench-' + uuid4().hex
         prefix = (f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; '
                   f'filename="{filename}"\r\nContent-Type: {content_type}\r\n\r\n').encode()
         data = prefix + content + f'\r\n--{boundary}--\r\n'.encode()
@@ -84,14 +88,14 @@ class RestTransport:
             journal_body={'file': {'field': field, 'filename': filename, 'content_type': content_type,
                                   'bytes': len(content), 'sha256': sha256(content).hexdigest()}}, binary=False)
 
-    def _exchange(self, method, path, data, *, content_type, journal_body, binary):
+    def _exchange(self, method, path, data, *, content_type, journal_body, binary, rate_limit_key=None):
         if self.offline:
             raise CompileFailure('archive_only_transport_cannot_issue_requests')
         url = urljoin(self.base, path)
         source, target = urlsplit(self.base), urlsplit(url)
         if (source.scheme, source.netloc) != (target.scheme, target.netloc):
             raise CompileFailure('REST_request_changes_origin')
-        self._pace(method.upper())
+        self._pace(method.upper(), rate_limit_key)
         request = Request(url, method=method, data=data,
                           headers={**self.headers, 'Content-Type': content_type,
                                    'Accept': '*/*' if binary else 'application/json'})

@@ -4,6 +4,7 @@ import re
 
 from mac_bench.environments.tools.contracts import ToolError, validate
 from mac_bench.environments.tools.navigation import page
+from mac_bench.environments.tools.evidence import EvidenceContext
 from mac_bench.environments.tools.query import (QUERY_PROPERTIES, QUERY_DESCRIPTION,
     query_document, cursor_start)
 from .protocol import ToolDefinition
@@ -45,10 +46,9 @@ class PublicResources:
 
     def list(self):
         descriptions = {'public/records.json': 'Recommended initial record directory: search business labels/IDs; native locators are directly readable. Not live state.',
-                        'public/facts.json': 'Source-linked initial evidence tables and labelled facts. Query /tables or /fields to find data; not live application state or task answers.',
+                        'public/facts.json': 'Source-linked evidence tables, sections and labelled facts. Table queries retain section context, including statements outside the table. Initial evidence, not live application state.',
                         'public/registers.json': 'Public register titles, field schemas and source passages. Use matching registers.* tools; formatting checks do not grade business decisions.',
                         'public/data_guide.md': 'SQL data-workspace examples, result references, register schemas and application-state boundaries.',
-                        'public/identities.json': 'Native identifiers for the task records.',
                         'public/environment.md': 'Application objects, identifier namespaces and short resource-query examples.',
                         'public/recording.md': 'Required business record formats and identifier meanings.',
                         'public/record_forms.json': 'Public typed administrative forms: field schemas and storage mappings, without task solutions.',
@@ -81,8 +81,11 @@ class PublicResources:
         if resource.endswith('.json'):
             if offset or length != 8000:
                 raise ToolError('invalid_arguments', 'JSON files use path/cursor/limit, not offset/length.')
-            return {'resource': resource, **page(json.loads(text),
-                    identity=[self.bundle.manifest['revision'], resource], path=path, cursor=cursor, limit=limit, compact=True)}
+            document = json.loads(text)
+            context = EvidenceContext(document) if resource == 'public/facts.json' and 'sections' in document else None
+            return {'resource': resource, **page(document,
+                    identity=[self.bundle.manifest['revision'], resource], path=path, cursor=cursor,
+                    limit=limit, compact=True, context_provider=context)}
         if path or cursor or limit != 20:
             raise ToolError('invalid_arguments', 'Text files use offset/length, not path/cursor/limit.')
         if not 0 <= offset <= len(text):
@@ -106,8 +109,10 @@ class PublicResources:
             raise ToolError('invalid_resource', 'Use search_resource for text files.')
         if resource == 'public/records.json' and not options.get('path') and 'fields' not in options:
             options['fields'] = {k: '/' + k for k in ('app', 'entity', 'label', 'business_id', 'business_ids', 'identity', 'source_keys')}
-        return {'resource': resource, **query_document(json.loads(text),
-                identity=[self.bundle.manifest['revision'], resource], **options)}
+        document = json.loads(text)
+        context = EvidenceContext(document) if resource == 'public/facts.json' and 'sections' in document else None
+        return {'resource': resource, **query_document(document,
+                identity=[self.bundle.manifest['revision'], resource], context_provider=context, **options)}
 
     def search(self, resource, query, *, context=200, limit=20, cursor=None):
         validate(SEARCH_RESOURCE.input_schema, {k: v for k, v in dict(resource=resource,

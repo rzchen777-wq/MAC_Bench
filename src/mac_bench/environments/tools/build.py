@@ -1,5 +1,6 @@
 """Build reusable operations from Entity Catalog, without factories or LLM calls."""
 import re
+from dataclasses import replace
 from hashlib import sha256
 
 from jsonschema import Draft202012Validator
@@ -7,7 +8,7 @@ from jsonschema import Draft202012Validator
 from mac_bench.environments.catalog.factories.assembly import BuildContext
 from mac_bench.environments.tools.adapters import frappe, rest, twenty
 from mac_bench.environments.tools.contracts import Tool, ToolError
-from mac_bench.environments.tools.examples import example
+from mac_bench.environments.tools.examples import example, review_examples
 from mac_bench.environments.tools.registry import ToolRegistry
 
 
@@ -31,6 +32,12 @@ def build_registry(entities, *, bindings=None):
             exclusions.append({'binding': identity, 'reason': 'No standalone native operations; access through the owning resource.'})
             continue
         operations = dict(contract['operations'])
+        if entity == 'bigcapital.credit_note_applied_invoice':
+            from .adapters.credit_reversal import reversal_tool
+            reverse = reversal_tool(binding, identity, entities.revision)
+            if len(entities.variants(entity)) > 1 or sum(len(v['bindings']) for v in entities.variants(entity)) > 1:
+                reverse = replace(reverse, name=reverse.name + '.' + sha256(identity.encode()).hexdigest()[:10])
+            tools.append(reverse)
         if (app == 'hrms' and 'read' in operations
                 and operations['read'].get('input', {}).get('read_locator') != 'singleton'):
             operations['list'] = {'contract_status': 'declared'}
@@ -44,11 +51,13 @@ def build_registry(entities, *, bindings=None):
                 elif app == 'twenty':
                     built = twenty.operation(context, binding, operation, native)
                 elif app == 'pretix':
+                    native = rest.refine_pretix_contract(binding, native)
                     built = rest.pretix_operation(context, binding, operation, native)
                 else:
                     built = rest.bigcapital_operation(context, binding, operation, native)
                 schema, handler, read_only, notes = built
                 Draft202012Validator.check_schema(schema)
+                review_examples(schema)
             except ToolError as exc:
                 exclusions.append({'binding': identity, 'operation': operation, 'reason': exc.code})
                 continue
@@ -74,7 +83,7 @@ def build_registry(entities, *, bindings=None):
                 'delete': 'Delete the specified record subject to native link and permission checks',
                 'destroy': 'Delete the specified record subject to native link and permission checks',
             }.get(verb, re.sub(r'([a-z])([A-Z])', r'\1 \2', verb).replace('_', ' ').capitalize())
-            description = f'{purpose}: {card["label"]} ({app}).'
+            description = native.get('usage_description') or f'{purpose}: {card["label"]} ({app}).'
             locators = schema.get('properties', {}).get('path', {}).get('properties', {})
             if locators:
                 description += ' Addressed by ' + ', '.join(locators) + '.'
@@ -85,9 +94,9 @@ def build_registry(entities, *, bindings=None):
                 'native_response': native.get('response', {}), 'fields': public_fields,
                 'identity': contract['identity']}
             result_description = {
-                'hrms': 'data is a native document, or a list of selected fields for list. Preserve name/modified/docstatus. pagination.next_offset continues lists.',
+                'hrms': frappe.output_description(operation) if app == 'hrms' else '',
                 'twenty': 'data is the selected root result. Connections contain edges[].node and pageInfo; select pageInfo fields to continue. See output for valid response paths.',
-                'pretix': 'data retains the native response. Lists use results/count/next; continue using this operation and native query parameters, not a next URL.',
+                'pretix': rest.pretix_output_description(native) if app == 'pretix' else '',
                 'bigcapital': 'data retains native response keys. See output for the captured shape; query paging and mutation return types depend on the registered operation.',
             }[app]
             tools.append(Tool(name, app, entity, operation, identity, binding['scope'], description,
@@ -98,4 +107,5 @@ def build_registry(entities, *, bindings=None):
                     'operation_contract': native,
                     'catalog_revision': entities.revision,
                     'execution_verified': False}))
-    return ToolRegistry(tools, catalog_revision=entities.revision, exclusions=exclusions)
+    from .adapters.accounting import refine
+    return ToolRegistry([refine(tool) for tool in tools], catalog_revision=entities.revision, exclusions=exclusions)

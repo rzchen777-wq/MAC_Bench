@@ -37,7 +37,7 @@ _MAX_PROCESS_OUTPUT_BYTES = 20 * 1024 * 1024
 @dataclass
 class _SandboxFS:
     files: dict[str, bytes] = field(default_factory=dict)
-    root: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="evoteam-memory-")))
+    root: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="mac-bench-memory-")))
 
 
 @dataclass
@@ -357,7 +357,7 @@ class MemorySandboxBackend(SandboxBackend):
         key = str(PurePosixPath(path))
         target = fs.root / key.lstrip("/")
         target.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=".evoteam-")
+        descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=".mac-bench-")
         try:
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)

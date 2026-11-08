@@ -203,7 +203,7 @@ class ToolResult:
 
 @dataclass(frozen=True)
 class ToolContext:
-    environment: ExecutionEnvironment
+    environment: ExecutionEnvironment | None
     agent_id: str
     sample_id: str
     permissions: frozenset[str] = frozenset()

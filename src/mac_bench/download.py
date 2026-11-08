@@ -28,28 +28,35 @@ def download_file(url, destination, checksum):
         temporary.unlink(missing_ok=True)
 
 
-def download_tasks(root, url, rows):
-    from mac_bench.data_cli import install_archive
+def download_tasks(root, url, rows, *, overwrite=False):
+    from mac_bench.data_cli import install_archive, verify_task
 
     root = Path(root)
     with urlopen(url, timeout=30) as response:
         manifest = json.load(response)
     available = {row["task_id"]: row for row in manifest["tasks"]}
     assets = manifest.get("assets", {})
+    needed_archives, needed_assets = [], set()
     for row in rows:
         item = available[row["task_id"]]
-        archive = root / ".cache/downloads" / (row["task_id"] + ".tar.gz")
-        download_file(urljoin(url, item["archive"]), archive, item["sha256"])
-        install_archive(archive, root / "data" / row["bundle"], row)
-        for name in item.get("environment_assets", []):
-            path = Path(name)
-            if path.is_absolute() or ".." in path.parts:
-                raise ValueError("Invalid environment file path")
-            asset = assets[name]
-            download_file(
-                urljoin(url, asset["url"]), root / "data" / path, asset["sha256"]
-            )
-        print("Installed", row["task_id"])
+        if any(item[key] != row[key] for key in ('world_revision', 'category', 'split')):
+            raise ValueError(f"Dataset revision differs for {row['task_id']}; use the matching code and dataset release")
+        destination = root / 'data' / row['bundle']
+        if destination.exists() and not overwrite:
+            verify_task(destination, row)
+        else:
+            needed_archives.append((item, row, _relative_file(item['archive'])))
+        needed_assets.update(_relative_file(name) for name in item.get('environment_assets', []))
+    for name in sorted(needed_assets):
+        asset = assets[name]
+        download_file(urljoin(url, asset['url']), root / 'data' / name, asset['sha256'])
+    for item, row, name in needed_archives:
+        archive = root / '.cache/dataset' / name
+        download_file(urljoin(url, name), archive, item['sha256'])
+        install_archive(archive, root / 'data' / row['bundle'], row, overwrite=overwrite)
+    _record_environment_install(root, assets, needed_assets)
+    for row in rows:
+        print('Installed', row['task_id'])
 
 
 def _relative_file(value):
@@ -59,7 +66,7 @@ def _relative_file(value):
     return path.as_posix()
 
 
-def download_hub_tasks(root, rows, *, repo_id, revision, token=None, max_workers=4):
+def download_hub_tasks(root, rows, *, repo_id, revision, token=None, max_workers=4, overwrite=False):
     """Install selected tasks from one pinned Hub snapshot, with parallel downloads and local reuse."""
     from huggingface_hub import HfApi, hf_hub_download, snapshot_download
     from mac_bench.data_cli import install_archive, verify_task
@@ -77,7 +84,7 @@ def download_hub_tasks(root, rows, *, repo_id, revision, token=None, max_workers
         if any(item[key] != row[key] for key in ('world_revision', 'category', 'split')):
             raise ValueError(f"Dataset revision differs for {row['task_id']}; use the matching code and dataset release")
         destination = root / 'data' / row['bundle']
-        if destination.exists():
+        if destination.exists() and not overwrite:
             verify_task(destination, row)
         else:
             needed_archives[_relative_file(item['archive'])] = (item, row)
@@ -110,7 +117,8 @@ def download_hub_tasks(root, rows, *, repo_id, revision, token=None, max_workers
             archive = cache / name
             if not _matches(archive, item['sha256']):
                 raise ValueError('Task package checksum differs: ' + name)
-            install_archive(archive, root / 'data' / row['bundle'], row)
+            install_archive(archive, root / 'data' / row['bundle'], row, overwrite=overwrite)
+    _record_environment_install(root, assets, needed_assets)
     for row in rows:
         print('Installed', row['task_id'])
     receipt = dict(repo_id=repo_id, revision=revision, commit=commit)
@@ -123,3 +131,29 @@ def _matches(path, checksum):
         return False
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest() == checksum
+
+
+def _record_environment_install(root, assets, selected):
+    """Record installed assets and remove superseded, unmodified managed blobs."""
+    from mac_bench.runtime.common.artifacts import write_json
+
+    index = 'environments/images/index.json'
+    if index not in selected:
+        return
+    receipt = root / '.cache/dataset/installed_assets.json'
+    previous = json.loads(receipt.read_text()) if receipt.exists() else {}
+    prefix = 'environments/images/blobs/sha256/'
+    for name, checksum in previous.items():
+        relative = _relative_file(name)
+        filename = Path(relative).name
+        if (relative.startswith(prefix) and relative == prefix + filename
+                and len(filename) == 64 and filename == checksum
+                and all(c in '0123456789abcdef' for c in filename)
+                and relative not in assets):
+            path = root / 'data' / relative
+            if _matches(path, checksum):
+                path.unlink()
+    installed = {name: checksum for name, checksum in previous.items()
+                 if name in assets and checksum == assets[name]['sha256']}
+    installed.update({name: assets[name]['sha256'] for name in selected})
+    write_json(installed, receipt)

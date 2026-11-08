@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping
+from typing import Any, Iterator, Literal, Mapping, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,13 @@ class BackendProcessSnapshot:
     signal: str | None = None
     stdin_open: bool = True
     output_truncated: bool = False
+
+
+class SandboxChannel(Protocol):
+    """A persistent stdin/stdout channel to a trusted program in the sandbox."""
+    def write(self, data: bytes) -> None: ...
+    def read(self) -> Iterator[bytes]: ...
+    def close(self) -> None: ...
 
 
 class SandboxBackend(ABC):
@@ -112,8 +119,8 @@ class SandboxBackend(ABC):
     ) -> str:
         """Resolve an existing sandbox path without following it outside its sandbox.
 
-        Backends used by model-facing file tools must implement this. It is kept
-        non-abstract so existing evaluator-only test doubles remain compatible.
+        Backends used by model-facing file tools implement this capability;
+        evaluator-only backends may leave it unsupported.
         """
 
         del sandbox, path, cwd, kind
@@ -141,6 +148,10 @@ class SandboxBackend(ABC):
     ) -> BackendProcessHandle:
         del sandbox, session_id, command, cwd, tty
         raise NotImplementedError("sandbox backend does not support managed processes")
+
+    def open_channel(self, sandbox: SandboxHandle, *, argv: Sequence[str], cwd: str) -> SandboxChannel:
+        """Start one persistent capability worker, separate from agent commands."""
+        raise NotImplementedError('sandbox backend does not support persistent channels')
 
     def poll_process(
         self,

@@ -185,8 +185,9 @@ def elapsed_seconds(start, end):
 
 class QueryEngine:
     def __init__(self, initial, current, identities, layout, *, facts=None, links=None,
-                 max_steps=2_000_000, max_rows=100000):
+                 max_steps=20_000_000, max_rows=100000):
         self.connection = sqlite3.connect(':memory:', cached_statements=0)
+        self.max_steps = max_steps
         self.remaining = max_steps
         self.layout = layout
         self.reads = set()
@@ -269,6 +270,7 @@ class QueryEngine:
         )
         schema_check(assertion, ASSERTION)
         try:
+            self.remaining = self.max_steps
             self.invalid_value_functions.clear()
             self._prepare(sql, collections)
             cursor = self.connection.execute(sql, self.parameters)

@@ -27,6 +27,8 @@ class EpisodeContext:
     # One-shot handover: revoke/drain tools, seal candidate, score, then reflect.
     # Never supplied for test episodes.
     dev_feedback: Callable[[], DevFeedback] | None = None
+    # Open lazily; ordinary tool-only methods do not create an extra workspace.
+    open_execution: Callable | None = None
 
 
 class Baseline(Protocol):

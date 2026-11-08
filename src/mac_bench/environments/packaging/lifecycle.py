@@ -75,7 +75,7 @@ def install_private_verifier(backend, sandbox, bundle):
     """Install a task grader while reusing application images."""
     import gzip
     from mac_bench.environments.verification.contracts import verify_package
-    from mac_bench.environments.verification.runtime import install_sql_runtime, install_observer_profile
+    from mac_bench.environments.verification.runtime import install_observer_profile
 
     amendment = bundle.manifest['metadata'].get('private_verifier_artifact')
     if amendment is None:
@@ -85,13 +85,8 @@ def install_private_verifier(backend, sandbox, bundle):
         raise ValueError('Task grader must be a declared private artifact')
     content = (bundle.root / name).read_bytes()
     checksum = sha256(content).hexdigest()
-    from mac_bench.environments.verification.contracts import digest as contract_digest
     contract = json.loads(content)
-    contract['revision'] = contract_digest({k:v for k,v in contract.items() if k != 'revision'})
-    content = json.dumps(contract,ensure_ascii=False).encode()
-    checksum = sha256(content).hexdigest()
     verify_package(contract)
-    install_sql_runtime(backend, sandbox, bundle)
     install_observer_profile(backend, sandbox, bundle)
     packed = gzip.compress(content, compresslevel=6, mtime=0)
     script = ('import gzip,hashlib,os,sys\n'

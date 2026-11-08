@@ -12,3 +12,7 @@ Business applications:
 - Pretix: https://github.com/pretix/pretix
 - Frappe HRMS: https://github.com/frappe/hrms
 - BigCapital: https://github.com/bigcapitalhq/bigcapital
+
+Superagent uses DeepSeek Harness (MIT): https://github.com/deepseek-ai/deepseek-harness
+Its npm dependencies and instruction-plugin patch are pinned in
+src/mac_bench/baselines/superagent/pnpm-lock.yaml and pnpm-workspace.yaml.

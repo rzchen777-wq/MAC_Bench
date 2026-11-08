@@ -3,56 +3,56 @@
   "tasks": [
     {
       "task_id": "op26_business_finance_001",
-      "world_revision": "bcfc52641b4a699d938fb9c0c4085dde7a1b8dc965dcdbf1afa85392ad88c8ca",
+      "world_revision": "3a8ee99717127122cd32eee9fba067f9c137a8f1bc93318b4d8bbb8228ab2842",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_001"
     },
     {
       "task_id": "op26_business_finance_003",
-      "world_revision": "e25df9e2575952b2461b14c1c0b0349b9954a6b3c592472e95da1510ebf74418",
+      "world_revision": "d0d9f8e9926b60201382ac7295f4dd02975c627ad1c10c30015313158de44b02",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_003"
     },
     {
       "task_id": "op26_business_finance_004",
-      "world_revision": "4bc0e0a288bd76ae2793fc342477d660aed30d63348831f56492c6586e513b78",
+      "world_revision": "26fcddacf17d974c069accb91cac43692e73c22a1bd3617b92149c4ed425028d",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_004"
     },
     {
       "task_id": "op26_business_finance_005",
-      "world_revision": "03f75d3392b74e1268e0ee12f0803f0145442b00985c1228e9b9c0942add64b9",
+      "world_revision": "730eeb22d716da0beb00d65cc31bc1d4d8128fb4b69c3d30e5d652fe6350c7e0",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_005"
     },
     {
       "task_id": "op26_business_finance_006",
-      "world_revision": "d0c1c43866c292d6c4c2874622e904913c45c64ade346427ffad814aa18bf9b5",
+      "world_revision": "8e68ed6a9a05e1d14b58eeb1a68bac358bdfac66a8d6e2c2f6613e525d22a0f6",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_006"
     },
     {
       "task_id": "op26_business_finance_007",
-      "world_revision": "710475c661c4e4c0d82e3579664f9c8e6a38178ea3986b846849cda5e39ee1e4",
+      "world_revision": "bd6ea08fa0ddc745468c7331ef42b909950e6574b0e5a85945c858719b20bc76",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_007"
     },
     {
       "task_id": "op26_business_finance_008",
-      "world_revision": "c260eec80e3de72c36a1ca5d44436bd6759fa0d6f7e847f40ea7d4103bdf93e3",
+      "world_revision": "0cca7eae42a1abe267be1f1e4adf442bf31eee6d274ca93506f4f6a83b2a60e1",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_008"
     },
     {
       "task_id": "op26_business_finance_009",
-      "world_revision": "63163480bcfecc83498c3ce78eea149c8686404cbfec1e1423239175f317cc6a",
+      "world_revision": "158ee5d702ea28406afe3dfd454175d7616d3cc9aa11c0bdef8268463261d86b",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_009"
@@ -227,119 +227,119 @@
     },
     {
       "task_id": "op26_project_content_operations_002",
-      "world_revision": "b7e0b1fb0989bb28e697faaedf4a7d49dce3e0563cd4309bff35d5add301d05e",
+      "world_revision": "8d92b279cf2ec9db6a748867fea47026fdb99df83f24c293918125cc4c2eb6cb",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_002"
     },
     {
       "task_id": "op26_project_content_operations_003",
-      "world_revision": "cedbd617432ba1e6a90218ec37d2f7ef72a2b9b30f90de863257d538284e61a9",
+      "world_revision": "667bd0edb9901e2e481a17c1ca809c39ed5d12c342c01b23377d27b695dfea5e",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_003"
     },
     {
       "task_id": "op26_project_content_operations_004",
-      "world_revision": "c3088d0aaa6e6487101e54b42122f16185218807e08abd905c437c0f1387b050",
+      "world_revision": "5f2be2f1825cf5a4b46e49f422b950b4eba9dd1d3f93ef3eed8420486691ce4e",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_004"
     },
     {
       "task_id": "op26_project_content_operations_005",
-      "world_revision": "805ad3748b770e4ce2d5dcd3f440e44887046449fc0872b3646158089ac50114",
+      "world_revision": "890cc14aa43fa556abeac7945b0f5e9faaa9c133bb1886a2d56b2c8f86d153fb",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_005"
     },
     {
       "task_id": "op26_project_content_operations_006",
-      "world_revision": "0789b9c55f0b285a7e4abbcc925728f1d2368284e2a885423211889c5d7895ac",
+      "world_revision": "b1cec86a8e96834e35381885ad5353131ce035cfb351735caf0d961f973d02ab",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_006"
     },
     {
       "task_id": "op26_project_content_operations_007",
-      "world_revision": "7569036b2d8d9a3d6c0d0857af87948032f188ba2a99ae9dd965c565d0d0c233",
+      "world_revision": "bd321faf7ebca0b157aeab2b13c96cad981c226de3e1fce1e0ba0dc440a26b05",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_007"
     },
     {
       "task_id": "op26_project_content_operations_008",
-      "world_revision": "786811e49ff149f3327ba3b0450de82b215e370f92c9e6022bacceb111225195",
+      "world_revision": "44642cdc19f081a2c6726aca77eb1e9cbee974ad8ed2a1a50dfa310e4571f8a1",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op26_project_content_operations_008"
     },
     {
       "task_id": "op_project_content_operations_002",
-      "world_revision": "de0ac7ffc47d1fae79b9c4a057c0efb5a3b72adf60f7e2cc26279aef806394fe",
+      "world_revision": "877910baaa3d1c4985bb2da661e41e6b701e12b754831b1bbde717e3984690d1",
       "category": "project_content_operations",
       "split": "test",
       "bundle": "tasks/op_project_content_operations_002"
     },
     {
       "task_id": "op26_service_administration_001",
-      "world_revision": "c7a20d85c469815413224aaafa511a104a6b7c1b60f090f656d4d8b3355482f6",
+      "world_revision": "b937917ef9942fa21beb87f7330a5b5dbf13e680cfb1f77d4e249e48aa454dd3",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_001"
     },
     {
       "task_id": "op26_service_administration_002",
-      "world_revision": "1a4c22c6d9e66038e9b4fb24d7b507eb5a05a794f14ea2659f0e6e7d990ef8d4",
+      "world_revision": "6b3248d21a7825814b5210c62202f88612f8a21e71f1cdd599cd1d23b238169c",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_002"
     },
     {
       "task_id": "op26_service_administration_003",
-      "world_revision": "c20d8a5d2c2e59c8fbb6962ea4351bdc426c4a189ccad130b6b6af19499af604",
+      "world_revision": "deb6b6ac3cb12e2d7d35133b2818720fe87933e4563ba48ddb42aed3144ff65e",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_003"
     },
     {
       "task_id": "op26_service_administration_004",
-      "world_revision": "c57c5291375b11bdf887639b1b1fa64477035608ffdffbaf14f2b72173da9713",
+      "world_revision": "df8885de8700c00460188772b77c56c88911332b0f87532ed7d3348720c18b10",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_004"
     },
     {
       "task_id": "op26_service_administration_005",
-      "world_revision": "573f5482a68d654088720e2342df4d13eafedd05bd211b56f8abc2e873847bdc",
+      "world_revision": "248abc1b72af935f3f102253029fcc4b3661763a3e2d0c66b8c9cd8e538f2d55",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_005"
     },
     {
       "task_id": "op26_service_administration_006",
-      "world_revision": "89cb79f62a28906afc2208e7cbed1a4883745edc04441764742e08233c41eea8",
+      "world_revision": "a31216bd1288fc611a37090bcef51a962c4d9f4c309868e3d5649e453841ffb4",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_006"
     },
     {
       "task_id": "op26_service_administration_008",
-      "world_revision": "cda1b2b57228d0f2f60f5e6d9c755889b123387c2746e50a52d8244d459cf1af",
+      "world_revision": "4bf805cfa87469722ad376220a6eb671e79aad737b66f00af762151abf9152fd",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_008"
     },
     {
       "task_id": "op26_service_administration_009",
-      "world_revision": "68889254e92309de0c43fc2fd4354fc931db880ed5ab146dff7ee3234787f2da",
+      "world_revision": "54fab96ef5970bbd6ed59663f752caa79edd7425c79e5e519f7f3f09be3b1c4f",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_009"
     },
     {
       "task_id": "op26_business_finance_002",
-      "world_revision": "a9e2b3f3f56f0461d5138e8c60faea45a310cad0b253ae3535ea38e6cc4d0d32",
+      "world_revision": "f38b3d0b4b28b40d39a0cd0eba3fcbcc50cf867e8e156db1e987fcafc5a4f39f",
       "category": "business_finance",
       "split": "dev",
       "bundle": "tasks/op26_business_finance_002"
@@ -367,14 +367,14 @@
     },
     {
       "task_id": "op26_project_content_operations_001",
-      "world_revision": "8b4da3041c090a9d731421323923e337340c62d69f1eb3b9c42956cbf83d71bf",
+      "world_revision": "899672930f6b348dc369708e71030d12e7e398c4c087a70f36eff6537e24cb7d",
       "category": "project_content_operations",
       "split": "dev",
       "bundle": "tasks/op26_project_content_operations_001"
     },
     {
       "task_id": "op26_service_administration_007",
-      "world_revision": "16078910449e994ac48870121379114e8e0d0321a3b8d0898a76a7f81e0e8379",
+      "world_revision": "5725ae6f498db9589b51e8a3d5271747c9db24835fb69a4b7e18adcb1c14ec63",
       "category": "service_administration",
       "split": "dev",
       "bundle": "tasks/op26_service_administration_007"

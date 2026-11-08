@@ -1,1 +1,1 @@
-"""apps / bigcapital components for Stage III."""
+"""apps / bigcapital environment components."""

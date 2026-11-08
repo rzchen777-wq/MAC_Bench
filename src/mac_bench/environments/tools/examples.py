@@ -8,6 +8,36 @@ from mac_bench.environments.tools.contracts import encoded
 from mac_bench.environments.tools.navigation import resolve
 
 
+def review_examples(schema):
+    """Remove native documentation examples that violate the executable schema.
+
+    Native DTO annotations can lag behind field renames. Keep valid examples;
+    request templates are generated from the same reviewed schema afterward.
+    """
+    validator = Draft202012Validator(schema)
+
+    def visit(node):
+        if not isinstance(node, dict):
+            return
+        if 'examples' in node:
+            candidates = node['examples']
+            valid = [value for value in candidates if validator.evolve(schema=node).is_valid(value)]
+            if valid:
+                node['examples'] = valid
+            else:
+                del node['examples']
+        for key in ('properties', '$defs', 'patternProperties', 'dependentSchemas'):
+            for child in node.get(key, {}).values():
+                visit(child)
+        for key in ('items', 'additionalProperties', 'contains', 'not', 'if', 'then', 'else'):
+            visit(node.get(key))
+        for key in ('allOf', 'anyOf', 'oneOf', 'prefixItems'):
+            for child in node.get(key, []):
+                visit(child)
+
+    visit(schema)
+
+
 def example(schema):
     def value(node, ancestry=()):
         if '$ref' in node:
@@ -35,7 +65,9 @@ def example(schema):
             keys.update(k for k, p in properties.items() if p.get('x-native-constraints', {}).get('required'))
             return {k: value(properties[k], ancestry) for k in sorted(keys)}
         if kind == 'array':
-            return [value(node.get('items', {}), ancestry) for _ in range(node.get('minItems', 0))]
+            count = max(1, node.get('minItems', 0))
+            count = min(node.get('maxItems', count), count)
+            return [value(node.get('items', {}), ancestry) for _ in range(count)]
         if kind in ('integer', 'number'):
             return max(1, node.get('minimum', 0), node.get('exclusiveMinimum', 0) + 1)
         if kind == 'boolean':

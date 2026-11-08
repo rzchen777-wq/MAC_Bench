@@ -1,4 +1,4 @@
-"""LiteLLM OpenAI-compatible gateway (ported from Meta-Team ``core.llm`` ``dev`` path)."""
+"""Shared LiteLLM gateway for model requests."""
 
 from __future__ import annotations
 
@@ -48,15 +48,12 @@ JITTER_RANGE = 1.0
 
 
 def apply_gateway_env(config: LLMConfig, *, environ: dict[str, str] | None = None) -> None:
-    """Publish OpenAI-compatible + Meta-Team DEV_ aliases for litellm."""
+    """Publish the selected model connection for LiteLLM."""
 
     env = os.environ if environ is None else environ
     env["OPENAI_API_BASE"] = config.base_url
     env["OPENAI_API_KEY"] = config.api_key or "not-needed"
     env["MAC_BENCH_LLM_THINKING"] = config.thinking_mode
-    env.setdefault("DEV_API_BASE", config.base_url)
-    env.setdefault("DEV_API_KEY", config.api_key or "not-needed")
-    env.setdefault("LLM_PROVIDER", "dev")
     if config.model:
         env.setdefault("MAC_BENCH_LLM_MODEL", config.model)
 
@@ -82,10 +79,10 @@ def bare_model_name(model: str) -> str:
 
 
 def resolve_model_name(model: str, *, api_base: str | None = None) -> str:
-    """Force ``openai/<model>`` whenever a custom OpenAI-compatible base is set.
+    """Select the gateway while preserving OpenRouter's model namespace.
 
     Bare ``deepseek/...`` would use litellm's native DeepSeek provider (``/beta``),
-    which is not the shared EvoTeam gateway path and can auth-fail under load.
+    which is not the shared gateway path and can auth-fail under load.
     """
 
     base = (
@@ -97,6 +94,9 @@ def resolve_model_name(model: str, *, api_base: str | None = None) -> str:
             or ""
         )
     ).strip()
+    hostname = (urlparse(base).hostname or "").lower()
+    if hostname == "openrouter.ai" or hostname.endswith(".openrouter.ai"):
+        return "openrouter/" + model.removeprefix("openrouter/")
     bare = bare_model_name(model)
     if base:
         return f"openai/{bare}"
@@ -197,7 +197,6 @@ def _build_kwargs(
     resolved_api_key = api_key or (
         os.environ.get("OPENAI_API_KEY")
         or os.environ.get("MAC_BENCH_LLM_API_KEY")
-        or os.environ.get("DEV_API_KEY")
     )
     kwargs: dict[str, Any] = {
         "model": resolved,
@@ -315,6 +314,7 @@ def complete(
     thinking_mode: str | None = None,
     timeout_seconds: float | None = None,
     max_retries: int = MAX_RETRIES,
+    client: Any = None,
 ) -> Any:
     """Sync litellm.completion with the same retry policy as ``acomplete``."""
 
@@ -330,6 +330,8 @@ def complete(
         thinking_mode=thinking_mode,
         timeout_seconds=timeout_seconds,
     )
+    if client is not None:
+        kwargs['client'] = client
     last_exc: Exception | None = None
     total_retry_delay = 0.0
     retries = max(0, int(max_retries))

@@ -54,6 +54,8 @@ def test_archive_excludes_solvers_generation_and_software_builds():
         names=archive.getnames()
     assert 'mac_bench/environments/business/worker.py' in names
     assert 'mac_bench/environments/tools/api.py' in names
+    assert 'mac_bench/environments/business/services.py' in names
+    assert not any('/container_snapshot/' in n for n in names)
     assert not any('/baselines/' in n or '/evaluation/' in n or '/engineering/' in n for n in names)
 
 

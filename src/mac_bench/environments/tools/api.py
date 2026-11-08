@@ -23,19 +23,22 @@ SCHEMAS = {
     'call_tool': object_schema({'tool_name': _TEXT, 'arguments': {'type': 'object'}, 'arguments_ref': REFERENCE,
                                 'request_id': {**_TEXT, 'maxLength': 128}}, ['tool_name', 'request_id']),
     'compute': COMPUTE_SCHEMA,
-    'read_result': object_schema({'result_ref': _TEXT, 'path': {'type': 'string'}, 'cursor': _TEXT,
-        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}}, ['result_ref']),
+    'read_result': object_schema({'result_ref': _TEXT, 'request_id': {**_TEXT, 'maxLength': 128},
+        'path': {'type': 'string'}, 'cursor': _TEXT,
+        'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}}),
     'query_result': object_schema({'result_ref': _TEXT, **QUERY_PROPERTIES}, ['result_ref']),
 }
 SCHEMAS['call_tool']['oneOf'] = [{'required': ['arguments'], 'not': {'required': ['arguments_ref']}},
                                 {'required': ['arguments_ref'], 'not': {'required': ['arguments']}}]
+SCHEMAS['read_result']['oneOf'] = [{'required': ['result_ref'], 'not': {'required': ['request_id']}},
+                                  {'required': ['request_id'], 'not': {'required': ['result_ref']}}]
 DESCRIPTIONS = {
     'list_apps': 'List applications accessible to your fixed world and role.',
     'list_tools': 'Find available business operations, including typed record forms where configured. query matches all words in tool names/descriptions, case-insensitively; camelCase and underscores are treated as word boundaries. Use an entity name such as task or shift assignment; no semantic/synonym search. Page with next_cursor; omit query to list all operations. Copy returned tool names exactly, including suffixes.',
     'describe_tool': 'Read an operation card with expanded request structure, a fictional call template, projection paths and lifecycle rules. section=input also returns expanded input when path is omitted. Follow explicit details links for deferred constraints; raw_input preserves the exact original schema. path is a JSON Pointer. Use next_cursor to continue the same path/limit.',
-    'call_tool': 'Execute one registered operation. Supply either arguments or arguments_ref={result_ref,path}, a JSON Pointer selecting a complete argument object from your saved compute/tool receipt. The resolved object is checked against the same input schema; no authority is added. Twenty filter/id/data and optional fields are siblings. Use a new request_id for each different call or fresh read; reuse it only to recover the same receipt. accepted/unknown do not establish completion. A record form may return partial with record_id and native step receipts: inspect live state; do not repeat create. Large results supply result_ref for read_result.',
+    'call_tool': 'Execute one registered operation. Supply either arguments or arguments_ref={result_ref,path}, a JSON Pointer selecting a complete argument object from your saved compute/tool receipt. The resolved object is checked against the same input schema; no authority is added. Twenty filter/id/data and optional fields are siblings. Use a new request_id for each different call or fresh read; reuse it only to recover the same receipt. accepted/unknown do not establish completion. A record form may return partial with record_id and native step receipts: inspect live state; do not repeat create. data_complete=false means data is an overview or is paged; read_result(result_ref, path="/data") retrieves the full saved data.',
     'compute': COMPUTE_DESCRIPTION,
-    'read_result': 'Read your saved tool result without re-executing it. result_ref comes from call_tool; path is a JSON Pointer (default /data). Follow returned paths and next_cursor to read exact nested values or long strings. Saved data is historical: use a fresh native read to check current state.',
+    'read_result': 'Read your saved tool result without executing an application operation. Supply result_ref from the receipt, or the original request_id if the reply was lost. path is a JSON Pointer (default /data); path="" reads the full receipt including status and error. Follow returned paths and next_cursor for exact nested values or long strings. request_not_recorded means no receipt is currently recorded; a call still in transit may arrive later. Saved data is historical: use a fresh native read to check current state.',
     'query_result': 'Query a saved call_tool receipt, not live state; no app operation is repeated. '
         'Default path=/data. Native pagination is separate: aggregates cover only this saved receipt. ' + QUERY_DESCRIPTION,
 }
@@ -131,8 +134,10 @@ def create_mcp_server(agent):
             structuredContent=result, isError=result['status'] in {'rejected', 'error', 'unknown', 'partial'})
 
     @server.tool(description=DESCRIPTIONS['read_result'])
-    def read_result(result_ref: str, path: str = '/data', cursor: str | None = None, limit: int = 20) -> dict:
-        return agent.read_result(result_ref, path, cursor, limit)
+    def read_result(result_ref: str | None = None, request_id: str | None = None,
+                    path: str = '/data', cursor: str | None = None, limit: int = 20) -> dict:
+        return dispatch(agent, 'read_result', {k: v for k, v in dict(result_ref=result_ref,
+            request_id=request_id, path=path, cursor=cursor, limit=limit).items() if v is not None})
 
     @server.tool(description=DESCRIPTIONS['query_result'])
     def query_result(result_ref: str, path: str = '/data', keys: list[str] | None = None,

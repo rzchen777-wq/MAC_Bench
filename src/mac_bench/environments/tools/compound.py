@@ -5,6 +5,10 @@ from .contracts import ToolError
 
 
 class CompoundOperation:
+    @property
+    def applications(self):
+        return frozenset(tool.application for tool in self.operations.values())
+
     def __call__(self, connection, arguments):
         raise RuntimeError('Compound operations require an attributed agent session')
 
