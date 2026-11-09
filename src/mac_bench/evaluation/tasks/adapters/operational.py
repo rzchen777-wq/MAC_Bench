@@ -2,6 +2,7 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+from mac_bench.runtime.sandbox.providers import create_backend, resolve_config
 from mac_bench.runtime.common.hashing import digest
 from mac_bench.environments.packaging.bundle import WorldBundle
 from mac_bench.environments.tools.api import SCHEMAS, DESCRIPTIONS, INTERFACE_VERSION
@@ -19,6 +20,8 @@ class OperationalTask(OwnedTask):
             raise ValueError('Operational tasks require tool API v2')
         self._owner, self._borrowed, self._backend = owner, session, backend
         self._scratch = None
+        selected_backend = owner.backend if owner is not None else backend
+        self._backend_config = selected_backend.config if selected_backend is not None else resolve_config('business')
         self.resources = PublicResources(self.bundle)
         self._resource_errors = (ToolError,)
         instructions = (self.bundle.root / 'private/agent_instructions.txt').read_text()
@@ -37,7 +40,7 @@ class OperationalTask(OwnedTask):
             if self._borrowed is None:
                 if self._owner is None:
                     from mac_bench.environments.business.runtime import PortableBusinessWorld
-                    self._owner = PortableBusinessWorld(self.bundle, backend=self._backend,
+                    self._owner = PortableBusinessWorld(self.bundle, backend=self._backend or create_backend(self._backend_config),
                                                   on_event=self._lifecycle_event,
                                                   diagnostic_directory=self.directory/'environment')
                 self._owner.__enter__()
@@ -77,10 +80,9 @@ class OperationalTask(OwnedTask):
 
     def _open_execution(self):
         from ..execution import TaskExecution
-        from mac_bench.runtime.sandbox.modal import ModalSandboxBackend
         # Team notes and scripts share one small workspace, separate from the
         # application host. Application access still goes through public tools.
-        backend = ModalSandboxBackend(cpu=.5, memory_mib=512, timeout=86400)
+        backend = create_backend(self._backend_config.workspace())
         sandbox = backend.create(name='mac-bench-agent-workspace', image='python:3.12-slim',
                                  network_blocked=True)
         self._scratch = (backend, sandbox)

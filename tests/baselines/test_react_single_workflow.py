@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import unittest
 import json
-from types import SimpleNamespace
 
 from mac_bench.runtime.agents.workflow import (
     AgentBudget,
@@ -13,8 +12,13 @@ from mac_bench.runtime.agents.workflow import (
 )
 from mac_bench.runtime.types import PublicTask
 from mac_bench.runtime.llm.client import ChatMessage, ChatResponse, ModelOutputTruncatedError
-from mac_bench.runtime.sandbox.base import CommandResult, SandboxHandle, BackendProcessHandle, BackendProcessSnapshot
-from mac_bench.runtime.sandbox.memory import MemorySandboxBackend
+from mac_bench.runtime.sandbox.base import CommandResult
+from mac_bench.runtime.tools import ToolSpec, ToolResult
+
+
+def tool_call(call_id, name, arguments):
+    return {'id': call_id, 'type': 'function',
+            'function': {'name': name, 'arguments': arguments}}
 
 
 class ScriptedToolClient:
@@ -39,45 +43,19 @@ class ScriptedToolClient:
         )
 
 
-class ScriptedBackend(MemorySandboxBackend):
-    def __init__(self, tools):
-        super().__init__()
-        self.tools = tools
-
-    def resolve_path(self, sandbox, *, path, cwd=None, kind="any"):
-        from pathlib import PurePosixPath
-        return str(PurePosixPath("/") / (cwd or ".") / path)
-
-    def start_process(self, sandbox, *, session_id, command, cwd, tty):
-        result = self.tools.exec_solver(None, command)
-        return BackendProcessHandle(session_id, result)
-
-    def poll_process(self, sandbox, handle, *, wait_ms=0):
-        r = handle.raw
-        return BackendProcessSnapshot('completed' if r.exit_code == 0 else 'failed', r.stdout, r.exit_code, stdin_open=False)
-
-
 class FakeTools:
-    def __init__(self) -> None:
-        self.commands: list[str] = []
-        self.patch_number = 0
-
-    def backend_for_workspace(self, workspace):
-        return ScriptedBackend(self)
-
+    def __init__(self):
+        self.commands = []
     def exec_solver(self, workspace, command, *, timeout=120):
         self.commands.append(command)
         return CommandResult(command, 0, "1 passed", 0.1)
-
-    def collect_patch(self, workspace):
-        self.patch_number += 1
-        return f"diff --git a/a.py b/a.py\n# patch {self.patch_number}\n"
-
+    def __iter__(self):
+        def execute(context, args):
+            result = self.exec_solver(None, args['command'])
+            return ToolResult.completed({'exit_code': result.exit_code}, model_text=result.stdout)
+        yield ToolSpec('exec', 'Run a task command', {'command': {'type': 'string'}}, ('command',), execute)
 
 TASK = PublicTask("task-001", "owner/repo", "Fix the behavior.")
-WORKSPACE = SimpleNamespace(
-    sandbox=SandboxHandle(id="fake", provider="fake", raw=object()), cwd="workspace/repo"
-)
 
 
 class ReactAgentTest(unittest.TestCase):
@@ -97,14 +75,7 @@ class ReactAgentTest(unittest.TestCase):
                         model="fake",
                         usage={"prompt_tokens": 10, "completion_tokens": 5},
                     )
-                call = {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "done"}),
-                    },
-                }
+                call = tool_call("call-finish", "finish", json.dumps({"summary": "done"}))
                 return ChatResponse(
                     content="",
                     model="fake",
@@ -114,7 +85,7 @@ class ReactAgentTest(unittest.TestCase):
                 )
 
         client = ThinkingClient()
-        outcome = ReactAgent(client, FakeTools()).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, FakeTools()).run(task=TASK)
 
         self.assertEqual("finished", outcome.stop_reason)
         self.assertEqual(
@@ -137,7 +108,7 @@ class ReactAgentTest(unittest.TestCase):
 
         client = TruncatedClient()
 
-        outcome = ReactAgent(client, FakeTools()).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, FakeTools()).run(task=TASK)
 
         self.assertEqual(1, client.calls)
         self.assertEqual("model_output_truncated", outcome.stop_reason)
@@ -157,11 +128,10 @@ class ReactAgentTest(unittest.TestCase):
                         'Already computed allocation A; next is B', model='fake',
                         usage={'prompt_tokens': 30, 'completion_tokens': 10}, finish_reason='length'))
                 return ChatResponse('', model='fake', usage={'prompt_tokens': 20, 'completion_tokens': 3},
-                    tool_calls=({'id': 'done', 'type': 'function', 'function': {
-                        'name': 'finish', 'arguments': '{"summary":"done"}'}},))
+                    tool_calls=(tool_call('done', 'finish', '{"summary":"done"}'),))
 
         client = Client()
-        outcome = ReactAgent(client, FakeTools(), model_max_tokens=100).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, FakeTools(), model_max_tokens=100).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual([100, 200], client.caps)
         self.assertEqual(2, outcome.model_calls)
@@ -180,9 +150,7 @@ class ReactAgentTest(unittest.TestCase):
                 if self.count == 1:
                     raise ModelOutputTruncatedError('length', response=ChatResponse(
                         'unfinished', model='fake', usage={}, finish_reason='length'))
-                return ChatResponse('', model='fake', usage={}, tool_calls=({
-                    'id': 'done', 'type': 'function', 'function': {
-                        'name': 'finish', 'arguments': '{"summary":"done"}'}},))
+                return ChatResponse('', model='fake', usage={}, tool_calls=(tool_call('done', 'finish', '{"summary":"done"}'),))
         reservations = []
         original = WorkingContext.prepare
         def prepare(context, messages, schemas, output_tokens, *args):
@@ -190,18 +158,16 @@ class ReactAgentTest(unittest.TestCase):
             return original(context, messages, schemas, output_tokens, *args)
         with patch.object(WorkingContext, 'prepare', prepare):
             outcome = ReactAgent(Client(), FakeTools(), model_max_tokens=100,
-                context_policy=ContextPolicy()).run(task=TASK, workspace=WORKSPACE)
+                context_policy=ContextPolicy()).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual([100, 200], reservations)
 
     def test_truncated_tool_calls_are_withheld_even_with_valid_json(self) -> None:
-        call = {'id': 'partial', 'type': 'function', 'function': {
-            'name': 'exec', 'arguments': '{"command":"write once"}'}}
+        call = tool_call('partial', 'exec', '{"command":"write once"}')
 
         class Client(ScriptedToolClient):
             def __init__(self):
-                super().__init__([call, {'id': 'done', 'type': 'function', 'function': {
-                    'name': 'finish', 'arguments': '{"summary":"done"}'}}])
+                super().__init__([call, tool_call('done', 'finish', '{"summary":"done"}')])
                 self.caps = []
 
             def complete(self, messages, **kwargs):
@@ -213,7 +179,7 @@ class ReactAgentTest(unittest.TestCase):
                 return super().complete(messages, **kwargs)
 
         client, tools = Client(), FakeTools()
-        outcome = ReactAgent(client, tools, model_max_tokens=100).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, tools, model_max_tokens=100).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual(['write once'], tools.commands)
         self.assertEqual([100, 200, 100], client.caps)
@@ -230,8 +196,7 @@ class ReactAgentTest(unittest.TestCase):
                 if self.count == 1:
                     raise ModelOutputTruncatedError('length', response=ChatResponse(
                         '', model='fake', usage={'prompt_tokens': 10, 'completion_tokens': 5},
-                        finish_reason='length', tool_calls=({'id': 'draft', 'type': 'function',
-                            'function': {'name': 'exec', 'arguments': prefix}},)))
+                        finish_reason='length', tool_calls=(tool_call('draft', 'exec', prefix),)))
                 if self.count == 2:
                     assert prefix in messages[-1].content
                     assert 'not present on disk' in messages[-1].content
@@ -240,11 +205,10 @@ class ReactAgentTest(unittest.TestCase):
                 else:
                     name, arguments = 'finish', '{"summary":"done"}'
                 return ChatResponse('', model='fake', usage={'prompt_tokens': 10, 'completion_tokens': 2},
-                    tool_calls=({'id': str(self.count), 'type': 'function',
-                                 'function': {'name': name, 'arguments': arguments}},))
+                    tool_calls=(tool_call(str(self.count), name, arguments),))
 
         client, tools = Client(), FakeTools()
-        outcome = ReactAgent(client, tools, model_max_tokens=100).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, tools, model_max_tokens=100).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual(['write complete first chunk'], tools.commands)
         self.assertEqual(3, outcome.model_calls)
@@ -257,9 +221,7 @@ class ReactAgentTest(unittest.TestCase):
                 usage = {'prompt_tokens': 10, 'completion_tokens': 2}
                 if self.count == 1:
                     raise ModelOutputTruncatedError('length', response=ChatResponse(
-                        '', model='fake', usage=usage, finish_reason='length', tool_calls=({
-                            'id': 'draft', 'type': 'function', 'function': {
-                                'name': 'exec', 'arguments': '{"command":"echo PRE'}},)))
+                        '', model='fake', usage=usage, finish_reason='length', tool_calls=(tool_call('draft', 'exec', '{"command":"echo PRE'),)))
                 if self.count == 2:
                     assert not kwargs.get('tools')
                     assert '{"command":"echo PRE' in messages[-1].content
@@ -268,19 +230,17 @@ class ReactAgentTest(unittest.TestCase):
                 if self.count == 3:
                     assert '{"command":"echo PREFIX' in messages[-1].content
                     return ChatResponse('"}', model='fake', usage=usage, finish_reason='stop')
-                return ChatResponse('', model='fake', usage=usage, tool_calls=({
-                    'id': 'done', 'type': 'function', 'function': {
-                        'name': 'finish', 'arguments': '{"summary":"done"}'}},))
+                return ChatResponse('', model='fake', usage=usage, tool_calls=(tool_call('done', 'finish', '{"summary":"done"}'),))
 
         client, tools = Client(), FakeTools()
         outcome = ReactAgent(client, tools, model_max_tokens=100,
-                             completion_recovery_attempts=3).run(task=TASK, workspace=WORKSPACE)
+                             completion_recovery_attempts=3).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual(['echo PREFIX'], tools.commands)
         self.assertEqual((4, 40, 8), (outcome.model_calls, outcome.input_tokens, outcome.output_tokens))
         client, tools = Client(), FakeTools()
         outcome = ReactAgent(client, tools, model_max_tokens=100,
-                             budget=AgentBudget(max_model_calls=2)).run(task=TASK, workspace=WORKSPACE)
+                             budget=AgentBudget(max_model_calls=2)).run(task=TASK)
         self.assertEqual('model_call_budget', outcome.stop_reason)
         self.assertEqual(2, outcome.model_calls)
         self.assertEqual([], tools.commands)
@@ -293,9 +253,7 @@ class ReactAgentTest(unittest.TestCase):
                 usage = {'prompt_tokens': 10, 'completion_tokens': 2}
                 if self.count == 1:
                     raise ModelOutputTruncatedError('length', response=ChatResponse(
-                        '', model='fake', usage=usage, finish_reason='length', tool_calls=({
-                            'id': 'bad', 'type': 'function', 'function': {
-                                'name': 'exec', 'arguments': '{"command":"repeat repeat'}},)))
+                        '', model='fake', usage=usage, finish_reason='length', tool_calls=(tool_call('bad', 'exec', '{"command":"repeat repeat'),)))
                 if self.count == 2:
                     assert not kwargs.get('tools')
                     raise ModelOutputTruncatedError('length', response=ChatResponse(
@@ -308,11 +266,9 @@ class ReactAgentTest(unittest.TestCase):
                     name, arguments = 'exec', '{"command":"write a small fresh chunk"}'
                 else:
                     name, arguments = 'finish', '{"summary":"done"}'
-                return ChatResponse('', model='fake', usage=usage, tool_calls=({
-                    'id': str(self.count), 'type': 'function',
-                    'function': {'name': name, 'arguments': arguments}},))
+                return ChatResponse('', model='fake', usage=usage, tool_calls=(tool_call(str(self.count), name, arguments),))
         tools = FakeTools()
-        outcome = ReactAgent(Client(), tools, model_max_tokens=100).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(Client(), tools, model_max_tokens=100).run(task=TASK)
         self.assertEqual('finished', outcome.stop_reason)
         self.assertEqual(['write a small fresh chunk'], tools.commands)
         self.assertEqual(4, outcome.model_calls)
@@ -328,7 +284,7 @@ class ReactAgentTest(unittest.TestCase):
 
         client = Client()
         outcome = ReactAgent(client, FakeTools(), model_max_tokens=100,
-            completion_recovery_max_tokens=300).run(task=TASK, workspace=WORKSPACE)
+            completion_recovery_max_tokens=300).run(task=TASK)
         self.assertEqual([100, 200, 300], client.caps)
         self.assertEqual('model_output_truncated', outcome.stop_reason)
         self.assertEqual(3, outcome.model_calls)
@@ -337,7 +293,7 @@ class ReactAgentTest(unittest.TestCase):
         for budget, reason in [(AgentBudget(max_model_calls=1), 'model_call_budget'),
                                (AgentBudget(max_tokens=12), 'token_budget')]:
             client = Client()
-            outcome = ReactAgent(client, FakeTools(), budget=budget).run(task=TASK, workspace=WORKSPACE)
+            outcome = ReactAgent(client, FakeTools(), budget=budget).run(task=TASK)
             self.assertEqual(1, len(client.caps))
             self.assertEqual(reason, outcome.stop_reason)
 
@@ -352,14 +308,7 @@ class ReactAgentTest(unittest.TestCase):
                 self.message_batches.append(list(messages))
                 self.max_tokens.append(max_tokens)
                 if len(self.message_batches) == 1:
-                    call = {
-                        "id": "reasoning-read",
-                        "type": "function",
-                        "function": {
-                            "name": "exec",
-                            "arguments": json.dumps({"command": "cat src/a.py"}),
-                        },
-                    }
+                    call = tool_call("reasoning-read", "exec", json.dumps({"command": "cat src/a.py"}))
                     return ChatResponse(
                         content="",
                         model="fake",
@@ -381,14 +330,7 @@ class ReactAgentTest(unittest.TestCase):
                             "tool_calls": [call],
                         },
                     )
-                call = {
-                    "id": "reasoning-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "done"}),
-                    },
-                }
+                call = tool_call("reasoning-finish", "finish", json.dumps({"summary": "done"}))
                 return ChatResponse(
                     content="",
                     model="fake",
@@ -401,7 +343,7 @@ class ReactAgentTest(unittest.TestCase):
         client = ReasoningClient()
 
         outcome = ReactAgent(client, FakeTools(), model_max_tokens=4321).run(
-            task=TASK, workspace=WORKSPACE
+            task=TASK
         )
 
         self.assertEqual("finished", outcome.stop_reason)
@@ -420,16 +362,9 @@ class ReactAgentTest(unittest.TestCase):
                     ChatMessage(
                         "assistant",
                         tool_calls=(
-                            {
-                                "id": call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": "exec",
-                                    "arguments": json.dumps(
+                            tool_call(call_id, "exec", json.dumps(
                                         {"command": "printf x" + "x" * 500}
-                                    ),
-                                },
-                            },
+                                    )),
                         ),
                     ),
                     ChatMessage("tool", "output " + "y" * 1000, tool_call_id=call_id),
@@ -458,14 +393,7 @@ class ReactAgentTest(unittest.TestCase):
         self.assertEqual("output " + "y" * 1000, messages[-1].content)
 
     def test_react_history_compaction_does_not_rewrite_reasoning_assistant(self) -> None:
-        call = {
-            "id": "signed-call",
-            "type": "function",
-            "function": {
-                "name": "exec",
-                "arguments": json.dumps({"command": "printf " + "x" * 500}),
-            },
-        }
+        call = tool_call("signed-call", "exec", json.dumps({"command": "printf " + "x" * 500}))
         message = ChatMessage(
             "assistant",
             tool_calls=(call,),
@@ -497,31 +425,15 @@ class ReactAgentTest(unittest.TestCase):
 
         client = VisionToolClient(
             [
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "schema inspected"}),
-                    },
-                }
+                tool_call("call-finish", "finish", json.dumps({"summary": "schema inspected"}))
             ]
         )
 
-        ReactAgent(client, FakeTools()).run(task=TASK, workspace=WORKSPACE)
+        ReactAgent(client, FakeTools()).run(task=TASK)
 
         names = {item["function"]["name"] for item in client.seen_tools[0]}
         self.assertEqual(
-            {
-                "exec",
-                "process",
-                "read",
-                "search",
-                "apply_patch",
-                "read_image",
-                "read_csv",
-                "finish",
-            },
+            {"exec", "finish"},
             names,
         )
 
@@ -529,28 +441,14 @@ class ReactAgentTest(unittest.TestCase):
         client = ScriptedToolClient(
             [
                 [
-                    {
-                        "id": "call-finish",
-                        "type": "function",
-                        "function": {
-                            "name": "finish",
-                            "arguments": json.dumps({"summary": "batch complete"}),
-                        },
-                    },
-                    {
-                        "id": "call-exec",
-                        "type": "function",
-                        "function": {
-                            "name": "exec",
-                            "arguments": json.dumps({"command": "git status --short"}),
-                        },
-                    },
+                    tool_call("call-finish", "finish", json.dumps({"summary": "batch complete"})),
+                    tool_call("call-exec", "exec", json.dumps({"command": "git status --short"})),
                 ]
             ]
         )
         tools = FakeTools()
 
-        outcome = ReactAgent(client, tools).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, tools).run(task=TASK)
 
         self.assertEqual(["git status --short"], tools.commands)
         self.assertEqual("batch complete", outcome.summary)
@@ -563,40 +461,19 @@ class ReactAgentTest(unittest.TestCase):
         client = ScriptedToolClient(
             [
                 [
-                    {
-                        "id": "call-first",
-                        "type": "function",
-                        "function": {
-                            "name": "exec",
-                            "arguments": json.dumps(
+                    tool_call("call-first", "exec", json.dumps(
                                 {"thought": "inspect files", "command": "cat src/a.py"}
-                            ),
-                        },
-                    },
-                    {
-                        "id": "call-second",
-                        "type": "function",
-                        "function": {
-                            "name": "exec",
-                            "arguments": json.dumps(
+                            )),
+                    tool_call("call-second", "exec", json.dumps(
                                 {"thought": "inspect tests", "command": "cat tests/test_a.py"}
-                            ),
-                        },
-                    },
+                            )),
                 ],
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "inspection complete"}),
-                    },
-                },
+                tool_call("call-finish", "finish", json.dumps({"summary": "inspection complete"})),
             ]
         )
         tools = FakeTools()
 
-        outcome = ReactAgent(client, tools).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, tools).run(task=TASK)
 
         self.assertEqual(["cat src/a.py", "cat tests/test_a.py"], tools.commands)
         self.assertEqual(2, outcome.tool_calls)
@@ -611,7 +488,7 @@ class ReactAgentTest(unittest.TestCase):
         self.assertEqual("call-second", second_messages[4].tool_call_id)
         self.assertTrue(
             all(
-                str(message.content).startswith("[process status=completed")
+                "1 passed" in str(message.content)
                 for message in second_messages[3:]
             )
         )
@@ -625,29 +502,15 @@ class ReactAgentTest(unittest.TestCase):
     def test_react_agent_uses_native_tool_calls_when_available(self) -> None:
         client = ScriptedToolClient(
             [
-                {
-                    "id": "call-exec",
-                    "type": "function",
-                    "function": {
-                        "name": "exec",
-                        "arguments": json.dumps(
+                tool_call("call-exec", "exec", json.dumps(
                             {"thought": "inspect", "command": "cat src/a.py"}
-                        ),
-                    },
-                },
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "inspected file"}),
-                    },
-                },
+                        )),
+                tool_call("call-finish", "finish", json.dumps({"summary": "inspected file"})),
             ]
         )
         tools = FakeTools()
 
-        outcome = ReactAgent(client, tools).run(task=TASK, workspace=WORKSPACE)
+        outcome = ReactAgent(client, tools).run(task=TASK)
 
         self.assertEqual(["cat src/a.py"], tools.commands)
         self.assertEqual("inspected file", outcome.summary)
@@ -662,14 +525,7 @@ class ReactAgentTest(unittest.TestCase):
     def test_react_prompt_uses_public_submission_contract_without_task_mode(self) -> None:
         class CaptureClient(ScriptedToolClient):
             def __init__(self) -> None:
-                super().__init__([{
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "nothing to change"}),
-                    },
-                }])
+                super().__init__([tool_call("call-finish", "finish", json.dumps({"summary": "nothing to change"}))])
                 self.systems: list[str] = []
 
             def complete(self, messages, *, temperature=0.0, max_tokens=None, tools=None):
@@ -682,12 +538,11 @@ class ReactAgentTest(unittest.TestCase):
                 )
 
         client = CaptureClient()
-        ReactAgent(client, FakeTools()).run(task=TASK, workspace=WORKSPACE)
+        ReactAgent(client, FakeTools()).run(task=TASK)
         self.assertIn(
-            "may include an explicit submission contract",
+            "provided task tools",
             client.systems[0],
         )
-        self.assertIn("already at the workspace root", client.systems[0])
         self.assertNotIn("Task mode:", client.systems[0])
         self.assertNotIn("exactly one tool", client.systems[0])
 
@@ -703,28 +558,14 @@ class ReactAgentTest(unittest.TestCase):
             def __init__(self) -> None:
                 super().__init__(
                     [
-                        {
-                            "id": "call-exec",
-                            "type": "function",
-                            "function": {
-                                "name": "exec",
-                                "arguments": json.dumps({"command": "ls visible"}),
-                            },
-                        },
-                        {
-                            "id": "call-finish",
-                            "type": "function",
-                            "function": {
-                                "name": "finish",
-                                "arguments": json.dumps(
+                        tool_call("call-exec", "exec", json.dumps({"command": "ls visible"})),
+                        tool_call("call-finish", "finish", json.dumps(
                                     {
                                         "summary": "submitted research artifact",
                                         "artifacts": [artifact],
                                     },
                                     ensure_ascii=False,
-                                ),
-                            },
-                        },
+                                )),
                     ]
                 )
                 self.systems: list[str] = []
@@ -740,8 +581,8 @@ class ReactAgentTest(unittest.TestCase):
 
         client = CaptureClient()
         tools = FakeTools()
-        outcome = ReactAgent(client, tools).run(task=TASK, workspace=WORKSPACE)
-        self.assertIn("For artifact tasks", client.systems[0])
+        outcome = ReactAgent(client, tools).run(task=TASK)
+        self.assertIn("call finish", client.systems[0])
         self.assertEqual(["ls visible"], tools.commands)
         self.assertEqual(1, len(outcome.artifacts))
         self.assertEqual("protocol_card", outcome.artifacts[0]["artifact_id"])
@@ -756,26 +597,12 @@ class ReactAgentTest(unittest.TestCase):
 
         client = ScriptedToolClient(
             [
-                {
-                    "id": "call-exec",
-                    "type": "function",
-                    "function": {
-                        "name": "exec",
-                        "arguments": json.dumps({"command": "cat huge.py"}),
-                    },
-                },
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "done"}),
-                    },
-                },
+                tool_call("call-exec", "exec", json.dumps({"command": "cat huge.py"})),
+                tool_call("call-finish", "finish", json.dumps({"summary": "done"})),
             ]
         )
         outcome = ReactAgent(client, BigOutputTools(), output_limit=200).run(
-            task=TASK, workspace=WORKSPACE
+            task=TASK
         )
         observation = next(
             item["observation"] for item in outcome.trace if item["kind"] == "observation"
@@ -787,64 +614,6 @@ class ReactAgentTest(unittest.TestCase):
         self.assertEqual("exec", tool["tool"])
         self.assertEqual("completed", tool["result"]["status"])
 
-    def test_react_agent_blocks_offline_commands(self) -> None:
-        client = ScriptedToolClient(
-            [
-                {
-                    "id": "call-exec",
-                    "type": "function",
-                    "function": {
-                        "name": "exec",
-                        "arguments": json.dumps({"command": "pip install -e ."}),
-                    },
-                },
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "used existing environment"}),
-                    },
-                },
-            ]
-        )
-        tools = FakeTools()
-        outcome = ReactAgent(client, tools).run(task=TASK, workspace=WORKSPACE)
-        self.assertEqual([], tools.commands)
-        blocked = next(item for item in outcome.trace if item["kind"] == "policy_blocked")
-        self.assertEqual("exec", blocked["tool"])
-        tool = next(item for item in outcome.trace if item["kind"] == "tool")
-        self.assertEqual("failed", tool["result"]["status"])
-        self.assertEqual("used existing environment", outcome.summary)
-
-    def test_react_agent_allows_network_commands_when_open(self) -> None:
-        client = ScriptedToolClient(
-            [
-                {
-                    "id": "call-exec",
-                    "type": "function",
-                    "function": {
-                        "name": "exec",
-                        "arguments": json.dumps({"command": "pip install rocket"}),
-                    },
-                },
-                {
-                    "id": "call-finish",
-                    "type": "function",
-                    "function": {
-                        "name": "finish",
-                        "arguments": json.dumps({"summary": "installed toolchain"}),
-                    },
-                },
-            ]
-        )
-        tools = FakeTools()
-        outcome = ReactAgent(client, tools, network="open").run(
-            task=TASK, workspace=WORKSPACE
-        )
-        self.assertEqual(["pip install rocket"], tools.commands)
-        self.assertFalse(any(item["kind"] == "policy_blocked" for item in outcome.trace))
-        self.assertEqual("installed toolchain", outcome.summary)
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,13 +15,14 @@ from pathlib import Path
 
 from mac_bench.runtime.paths import repository_root
 from mac_bench.runtime.common.hashing import digest
-from mac_bench.runtime.sandbox.modal import ModalSandboxBackend, native_host_image
+from mac_bench.runtime.sandbox.providers import create_backend, resolve_config
+from mac_bench.runtime.sandbox.images import prepare_cached_image, write_record
 from mac_bench.environments.packaging.lifecycle import (
-    install_public_resources,
-    install_private_verifier,
+    public_resource_files,
+    private_verifier_files,
     start_service,
 )
-from mac_bench.environments.packaging.modal_session import ModalWorldSession
+from mac_bench.environments.packaging.session import WorldSession
 from mac_bench.environments.packaging.background import configure_hrms_shifts
 
 
@@ -90,9 +91,27 @@ def image_context(source, destination, blobs):
             shutil.copyfile(source / name, target)
 
 
-def upload_file(sandbox, source, target):
-    """Stream large environment files without holding an image in host RAM."""
-    sandbox.raw.filesystem.copy_from_local(source, target)
+def cached_image_context(source, cache, blobs, *, index=None):
+    """Content-addressed build paths let providers reuse shared OCI uploads."""
+    identity = digest({'blobs': sorted(blobs), 'index': index})
+    destination = cache / identity
+    if destination.is_dir():
+        return destination
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='context-', dir=cache) as temporary:
+        staged = Path(temporary) / 'files'
+        staged.mkdir()
+        image_context(source, staged, blobs)
+        if index is None:
+            (staged / 'oci-layout').write_text('{"imageLayoutVersion":"1.0.0"}')
+        else:
+            (staged / 'index.json').write_text(json.dumps(index))
+        try:
+            staged.rename(destination)
+        except OSError:
+            if not destination.is_dir():
+                raise
+    return destination
 
 
 RUNTIME_DIRECTORIES = {"apps", "catalog", "tools", "verification", "runtime", "packaging", "business"}
@@ -128,8 +147,6 @@ class PortableBusinessWorld:
         self.diagnostic_directory = diagnostic_directory
         config_path = bundle.root / "environment/environment.json"
         self.environment = json.loads(config_path.read_text())
-        cache = repository_root() / ".cache/business" / bundle.manifest["world_id"]
-        self.cache_directory = cache
         image_root = repository_root() / "data/environments/images"
         self.image_index, self.image_blobs = selected_images(
             image_root, {service["image"] for service in self.environment["services"]}
@@ -145,18 +162,13 @@ class PortableBusinessWorld:
             for path in sorted((bundle.root / "environment").rglob("*"))
             if path.is_file() and path.relative_to(bundle.root / "environment").parts[0] not in {"runtime", "images"}
         }
-        self.snapshot_name = "business-" + digest({
+        self.image_recipe = "business-" + digest({
             "environment": environment_files, "images": images,
             "prepared_format": PREPARED_FORMAT,
         })
-        self.backend = backend or ModalSandboxBackend(
-            vm_runtime=True,
-            timeout=7200,
-            snapshot_directory=cache,
-            cpu=float(os.environ.get("MAC_BENCH_CPUS", "4")),
-            memory_mib=int(os.environ.get("MAC_BENCH_MEMORY_MIB", "8192")),
-        )
+        self.backend = backend or create_backend(resolve_config('business'))
         self.sandbox = None
+        self.prepared_image = None
         self.closed = False
         self.runtime_installed = False
         self.runtime_code_installed = False
@@ -168,83 +180,49 @@ class PortableBusinessWorld:
         return result.stdout
 
     def __enter__(self):
-        if self.backend.snapshot_exists(name=self.snapshot_name):
-            return self._open()
-        import fcntl
+        return self._open()
 
-        self.cache_directory.mkdir(parents=True, exist_ok=True)
-        with (self.cache_directory / "prepare.lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            return self._open()
+    def _prepare(self, directory):
+        image_root = repository_root() / "data/environments/images"
+        index, blobs = self.image_index, self.image_blobs
+        # Stable, immutable contexts keep shared layer uploads reusable across tasks.
+        contexts = repository_root() / '.cache/business/contexts'
+        shared = sorted(set(shared_image_blobs(image_root)) & set(blobs))
+        common = cached_image_context(image_root, contexts, shared)
+        task = cached_image_context(image_root, contexts, sorted(set(blobs) - set(shared)), index=index)
+        image = self.backend.business_image(common, task)
+        self.sandbox = self.backend.create(name="mac-bench-business", image=image)
+        self._event("allocated")
+        self.command("mkdir -p /work/world/src /work/sessions")
+        self._install_runtime()
+        root = self.bundle.root / "environment"
+        small_files = {}
+        for file in sorted(root.rglob("*")):
+            if not file.is_file() or file.relative_to(root).parts[0] in {"images", "runtime"}:
+                continue
+            rel = file.relative_to(root)
+            if rel.parts[0] == "host":
+                target = Path("/work").joinpath(*rel.parts[1:])
+            else:
+                target = Path("/work/environment") / rel
+            if file.stat().st_size < 16 * 1024 * 1024:
+                small_files[str(target)] = file.read_bytes()
+            else:
+                self.command(shlex.join(["mkdir", "-p", str(target.parent)]), 30)
+                self.backend.upload_file(self.sandbox, source=file, path=str(target))
+        self.backend.write_files(self.sandbox, files=small_files)
+        return self.backend.capture_business_image(self.sandbox,recipe=self.image_recipe,timeout=1200)
 
     def _open(self):
         try:
-            if self.backend.snapshot_exists(name=self.snapshot_name):
-                self.sandbox = self.backend.create(
-                    name="mac-bench-business", snapshot=self.snapshot_name
-                )
-                self._event("allocated")
-                self._restore()
-                return self
-            image_root = repository_root() / "data/environments/images"
-            index, blobs = self.image_index, self.image_blobs
-            # Modal uploads build-context files through its blob store and reuses
-            # unchanged layers. Large images never travel through exec logs.
-            cache = (
-                repository_root() / ".cache/business" / self.bundle.manifest["world_id"]
-            )
-            cache.mkdir(parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix="images-", dir=cache) as temporary:
-                common = Path(temporary) / "common"
-                task = Path(temporary) / "task"
-                common.mkdir()
-                task.mkdir()
-                shared = sorted(set(shared_image_blobs(image_root)) & set(blobs))
-                image_context(image_root, common, shared)
-                image_context(image_root, task, sorted(set(blobs) - set(shared)))
-                (common / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
-                (task / "index.json").write_text(json.dumps(index))
-                # All tasks reuse the same application-image layer. Only the
-                # selected manifest and task-specific deltas vary per build.
-                image = (
-                    native_host_image()
-                    .apt_install("skopeo")
-                    .pip_install(
-                        "PyYAML", "jsonschema", "graphql-core", "openapi-schema-validator",
-                    )
-                    .add_local_dir(common, "/work/environment/images", copy=True)
-                    .add_local_dir(task, "/work/environment/images", copy=True)
-                )
-                self.sandbox = self.backend.create(
-                    name="mac-bench-business", image=image
-                )
-            self._event("allocated")
-            self.command("mkdir -p /work/world/src /work/sessions")
-            self._install_runtime()
-            root = self.bundle.root / "environment"
-            small_files = {}
-            for file in sorted(root.rglob("*")):
-                if not file.is_file() or file.relative_to(root).parts[0] in {"images", "runtime"}:
-                    continue
-                rel = file.relative_to(root)
-                if rel.parts[0] == "host":
-                    target = Path("/work").joinpath(*rel.parts[1:])
-                else:
-                    target = Path("/work/environment") / rel
-                if file.stat().st_size < 16 * 1024 * 1024:
-                    small_files[str(target)] = file.read_bytes()
-                else:
-                    self.command(shlex.join(["mkdir", "-p", str(target.parent)]), 30)
-                    upload_file(self.sandbox, file, str(target))
-            self.backend.write_files(self.sandbox, files=small_files)
-            self.command(
-                "PYTHONPATH=/work/world/src python3 -m mac_bench.environments.business.worker /work/environment --prepare-only",
-                1200,
-            )
-            self.command("rm -rf /work/environment/images/blobs", 60)
-            self.backend.create_snapshot(
-                self.sandbox, name=self.snapshot_name, timeout=600
-            )
+            if self.prepared_image is None:
+                self.prepared_image=prepare_cached_image(self.backend,kind='business',
+                    recipe=self.image_recipe,build=self._prepare)
+            if self.diagnostic_directory:
+                write_record(Path(self.diagnostic_directory)/'image.json',self.prepared_image)
+            if self.sandbox is None:
+                self.sandbox=self.backend.create(name='mac-bench-business',prepared=self.prepared_image)
+                self._event('allocated')
             self._restore()
             return self
         except BaseException:
@@ -272,12 +250,10 @@ class PortableBusinessWorld:
             "/work/world/" + str(path.relative_to(root)): path.read_bytes()
             for path in root.rglob("*") if path.is_file()
         }
-        if not self.bundle.manifest["metadata"].get("private_verifier_observer_profile"):
-            files["/work/world/profile.py"] = (self.bundle.root / "private/profile.py").read_bytes()
+        files.update(public_resource_files(self.bundle))
+        files.update(private_verifier_files(self.bundle))
         if files:
             self.backend.write_files(self.sandbox, files=files)
-        install_public_resources(self.backend, self.sandbox, bundle=self.bundle)
-        install_private_verifier(self.backend, self.sandbox, self.bundle)
         self.runtime_installed = True
 
     def _restore(self):
@@ -294,7 +270,7 @@ class PortableBusinessWorld:
         if scheduling:
             self._event('scheduling_policy_applied', policy=scheduling)
         start_service(self.backend, self.sandbox)
-        self.session = ModalWorldSession(self.backend, self.sandbox)
+        self.session = WorldSession(self.backend, self.sandbox)
         self.assert_initial()
         self._event("ready")
 
@@ -322,6 +298,8 @@ class PortableBusinessWorld:
             pass
 
     def close(self):
+        if hasattr(self, "session"):
+            self.session.close()
         if self.sandbox is not None and not self.closed:
             self.backend.delete(self.sandbox)
             self.closed = True

@@ -3,56 +3,56 @@
   "tasks": [
     {
       "task_id": "op26_business_finance_001",
-      "world_revision": "3a8ee99717127122cd32eee9fba067f9c137a8f1bc93318b4d8bbb8228ab2842",
+      "world_revision": "4a74db16313e56863737c998bbf962f50ad20a63a08a31b474212a852599d6e0",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_001"
     },
     {
       "task_id": "op26_business_finance_003",
-      "world_revision": "d0d9f8e9926b60201382ac7295f4dd02975c627ad1c10c30015313158de44b02",
+      "world_revision": "fe8556b391c8504b445eb1a22fe1b0d42d8036385cbd2373eccf20ec6ff15dd8",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_003"
     },
     {
       "task_id": "op26_business_finance_004",
-      "world_revision": "26fcddacf17d974c069accb91cac43692e73c22a1bd3617b92149c4ed425028d",
+      "world_revision": "dc2a7cbd6120f3f5450c92a7bbd4f538a2a0a625c6fd812d4053b62be1cb921e",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_004"
     },
     {
       "task_id": "op26_business_finance_005",
-      "world_revision": "730eeb22d716da0beb00d65cc31bc1d4d8128fb4b69c3d30e5d652fe6350c7e0",
+      "world_revision": "cc87cda6791ccaa35a0df071345db8bdd4debf45c4497849e83f8c7397599837",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_005"
     },
     {
       "task_id": "op26_business_finance_006",
-      "world_revision": "8e68ed6a9a05e1d14b58eeb1a68bac358bdfac66a8d6e2c2f6613e525d22a0f6",
+      "world_revision": "90cd20c39b992bf6ec1ede5e25e7214a2943378f172d50d8f16a9e94ae66b932",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_006"
     },
     {
       "task_id": "op26_business_finance_007",
-      "world_revision": "bd6ea08fa0ddc745468c7331ef42b909950e6574b0e5a85945c858719b20bc76",
+      "world_revision": "a22f9a6c8c11b241993b32faab05c2e9fe776c89cf57564de3ca136c4342381f",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_007"
     },
     {
       "task_id": "op26_business_finance_008",
-      "world_revision": "0cca7eae42a1abe267be1f1e4adf442bf31eee6d274ca93506f4f6a83b2a60e1",
+      "world_revision": "1f5734b28e5369d4ce5e4ef54f15b9e820ed20f56123674835e2145e9b07dd8c",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_008"
     },
     {
       "task_id": "op26_business_finance_009",
-      "world_revision": "158ee5d702ea28406afe3dfd454175d7616d3cc9aa11c0bdef8268463261d86b",
+      "world_revision": "bdb5803936e00683238bc9607c1ffe897ad5438a19cbb7f501f602f094b5d1a5",
       "category": "business_finance",
       "split": "test",
       "bundle": "tasks/op26_business_finance_009"
@@ -325,7 +325,7 @@
     },
     {
       "task_id": "op26_service_administration_008",
-      "world_revision": "4bf805cfa87469722ad376220a6eb671e79aad737b66f00af762151abf9152fd",
+      "world_revision": "4c75d2ee70e30da66ceb6e4139605abcbceb553092f10ff8053d5f036bd6150d",
       "category": "service_administration",
       "split": "test",
       "bundle": "tasks/op26_service_administration_008"
@@ -339,7 +339,7 @@
     },
     {
       "task_id": "op26_business_finance_002",
-      "world_revision": "f38b3d0b4b28b40d39a0cd0eba3fcbcc50cf867e8e156db1e987fcafc5a4f39f",
+      "world_revision": "1655410fa987290e02c6c696cc05e244e576a460ccaae252366b74ac06f6b7e5",
       "category": "business_finance",
       "split": "dev",
       "bundle": "tasks/op26_business_finance_002"

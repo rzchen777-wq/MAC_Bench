@@ -1,5 +1,4 @@
 from dataclasses import asdict
-from types import SimpleNamespace
 import pytest
 from mac_bench.baselines.react_single.tasks import ReactSingle
 from mac_bench.evaluation.episodes.protocol import EpisodeContext

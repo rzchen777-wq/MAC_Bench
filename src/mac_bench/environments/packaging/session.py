@@ -1,4 +1,4 @@
-"""Owner-side access to one live Modal world; no secrets enter baseline context."""
+"""Owner-side access to one live business world; no secrets enter baseline context."""
 
 import base64
 import gzip
@@ -34,7 +34,7 @@ class _Request:
         self.sent = False
 
 
-class ModalWorldSession:
+class WorldSession:
     def __init__(self, backend, sandbox, *, root="/work/world"):
         self.backend, self.sandbox, self.root = backend, sandbox, root
         self._lock = threading.Lock()
@@ -46,29 +46,34 @@ class ModalWorldSession:
     def _connect(self):
         """Called under the state lock; subsequent I/O never holds that lock."""
         current = self.root + '/src/' + __package__.replace('.', '/') + '/rpc_client.py'
-        process = self.sandbox.raw.exec('python3', '-I', '-u', current, text=True, bufsize=1)
+        process = self.backend.open_channel(self.sandbox, argv=['python3', '-I', '-u', current], cwd=self.root)
         relay = self._connection = _Relay(process)
         threading.Thread(target=self._receive, args=(relay,), daemon=True).start()
         threading.Thread(target=self._send, args=(relay,), daemon=True).start()
-        def drain_errors():
-            for _ in process.stderr:
-                pass
-        threading.Thread(target=drain_errors, daemon=True).start()
         return relay
 
     def _receive(self, relay):
         try:
-            for line in relay.process.stdout:
-                envelope = json.loads(line)
-                with self._lock:
-                    if self._connection is not relay:
-                        return
-                    request = relay.pending.pop(envelope['id'])
-                request.future.set_result(envelope)
+            buffer = b''
+            for chunk in relay.process.read():
+                buffer += chunk
+                while b'\n' in buffer:
+                    line, buffer = buffer.split(b'\n', 1)
+                    self._receive_line(relay, line)
+            if buffer:
+                raise ValueError('Incomplete world RPC response')
         except Exception:
             pass
         finally:
             self._disconnect(relay)
+
+    def _receive_line(self, relay, line):
+        envelope = json.loads(line)
+        with self._lock:
+            if self._connection is not relay:
+                return
+            request = relay.pending.pop(envelope['id'])
+        request.future.set_result(envelope)
 
     def _send(self, relay):
         """One writer batches adjacent calls; replies are matched independently."""
@@ -95,8 +100,7 @@ class ModalWorldSession:
                         # A partial write/drain failure may already have sent bytes.
                         relay.pending[identity].sent = True
                 if pending:
-                    relay.process.stdin.write(''.join(line for _, line in pending))
-                    relay.process.stdin.drain()
+                    relay.process.write(''.join(line for _, line in pending).encode())
                 if closing:
                     return
         except Exception:
@@ -112,8 +116,7 @@ class ModalWorldSession:
         for request in pending.values():
             request.future.set_exception(WorldRPCError(request.sent))
         try:
-            relay.process.stdin.write_eof()
-            relay.process.stdin.drain()
+            relay.process.close()
         except Exception:
             pass
 

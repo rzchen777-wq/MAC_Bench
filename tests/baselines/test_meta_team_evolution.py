@@ -9,7 +9,7 @@ from mac_bench.evaluation import run_episode
 from mac_bench.baselines.meta_team.tasks import MetaTeam
 from mac_bench.baselines.meta_team.evolution import DevEvolution, load_frozen
 from mac_bench.baselines.common.config import ROOT, tree_hash
-from test_method_adapters import handle, Script, response, operations
+from .support import handle, Script, response, operations
 
 pytestmark = pytest.mark.baselines
 

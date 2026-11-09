@@ -1,7 +1,6 @@
 """Native loop termination, message delivery and explicit recruitment semantics."""
 from mac_bench.runtime.paths import repository_root
 import asyncio
-from pathlib import Path
 
 import pytest
 

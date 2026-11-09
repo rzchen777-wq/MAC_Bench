@@ -35,7 +35,7 @@ class ToolRegistry:
         # Hash each full executable contract, without constructing a second
         # multi-megabyte registry document just to discover a small subset.
         self.revision = sha256(encoded({'interface': 2, 'catalog': catalog_revision,
-            'tools': [(k, sha256(encoded(self._tools[k].archive()).encode()).hexdigest())
+            'tools': [(k, sha256(encoded(self._tools[k]._archive_view()).encode()).hexdigest())
                       for k in sorted(self._tools)]}).encode()).hexdigest()
 
     def get(self, name):

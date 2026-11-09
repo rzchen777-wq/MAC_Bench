@@ -234,6 +234,7 @@ def test_same_runner_accepts_operational_adapter(tmp_path):
         def observe_and_evaluate(self):return {'observation':self.observe(),'evaluation':self.evaluate()}
         def export_receipts(self,p):p.write_text('receipt')
     class Owner:
+        backend = None
         def __init__(self):self.session=Session();self.closed=False
         def __enter__(self):return self
         def close(self):self.closed=True

@@ -30,7 +30,10 @@ class EntityCatalog:
     FORMAT = 'business-entity-catalog/v2'
 
     def __init__(self, payload, *, evidence=None):
-        self._data = deepcopy(payload)
+        self._initialize(deepcopy(payload), evidence=evidence)
+
+    def _initialize(self, payload, *, evidence=None):
+        self._data = payload
         self._evidence = evidence
         self._validate()
 
@@ -103,7 +106,15 @@ class EntityCatalog:
     @classmethod
     def load(cls, path, *, evidence_manifest=None):
         evidence = EvidenceStore(evidence_manifest) if evidence_manifest else None
-        result = cls(read_json(path))
+        # The decoder owns this graph exclusively. The public constructor still
+        # copies caller-owned data, but loading need not duplicate the entire
+        # catalog before validating it.
+        payload = read_json(path)
+        if cls is EntityCatalog:
+            result = cls.__new__(cls)
+            result._initialize(payload)
+        else:
+            result = cls(payload)
         if evidence:
             for app, spec in result._data['applications'].items():
                 if evidence.manifest['applications'].get(app, {}).get('sha256') != spec['evidence_sha256']:

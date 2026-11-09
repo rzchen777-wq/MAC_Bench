@@ -19,6 +19,14 @@ FIXTURE = json.loads((Path(__file__).parent/'fixtures/credit_reversal.json').rea
 
 
 @pytest.fixture(scope='module')
+def node():
+    executable = shutil.which('node')
+    if executable is None:
+        pytest.skip('Node is required for native command behavior')
+    return executable
+
+
+@pytest.fixture(scope='module')
 def tool():
     import os
     from mac_bench.runtime.paths import repository_root
@@ -55,8 +63,7 @@ def test_wrong_locator_rejected(tool, path):
         validate(tool.input_schema, {'path': path})
 
 
-def test_controller_wiring_and_transaction_behavior(tmp_path):
-    node = shutil.which('node') or str(Path('.cache/toolchain/node/bin/node').resolve())
+def test_controller_wiring_and_transaction_behavior(tmp_path, node):
     controller = patch_credit_unapply_controller(FIXTURE['controller'])
     command = patch_credit_unapply_transaction(FIXTURE['command'])
     assert patch_credit_unapply_controller(controller) == controller
@@ -88,8 +95,7 @@ const events_1={events:{creditNote:{onApplyToInvoicesDeleted:'deleted'}}};
 
 
 @pytest.mark.parametrize('vendor', [False, True])
-def test_two_concurrent_reversals_decrement_only_once(vendor):
-    node = shutil.which('node') or str(Path('.cache/toolchain/node/bin/node').resolve())
+def test_two_concurrent_reversals_decrement_only_once(vendor, node):
     original = FIXTURE['vendor_command' if vendor else 'command']
     patch = patch_vendor_unapply_transaction if vendor else patch_credit_unapply_transaction
     name = 'DeleteApplyVendorCreditToBillService' if vendor else 'DeleteCreditNoteApplyToInvoices'

@@ -1,16 +1,13 @@
+from .support import Script, handle, operations, response, scripted
 """Exercise original worker/orchestration code through the common episode boundary."""
 import json
 import os
 from pathlib import Path
-from threading import Lock
 from types import SimpleNamespace
-import numpy as np
 import pytest
-from mac_bench.runtime.llm.client import ChatMessage, ChatResponse
+from mac_bench.runtime.llm.client import ChatMessage
 from mac_bench.runtime.agents.workflow import AgentBudget
-from mac_bench.evaluation import run_episode,task_record,open_task
-from mac_bench.environments.packaging.bundle import seal_bundle
-from mac_bench.environments.packaging.interface import business_guide
+from mac_bench.evaluation import run_episode
 from mac_bench.runtime.sandbox.base import CommandResult
 from mac_bench.baselines.aorchestra.tasks import AOrchestra
 from mac_bench.baselines.meta_team.tasks import MetaTeam
@@ -18,87 +15,20 @@ from mac_bench.baselines.meta_team.tasks import MetaTeam
 pytestmark = pytest.mark.baselines
 
 
-class Encoder:
-    def encode(self,text):return np.array([1.,2.,3.])
 
 
-class CodeWorld:
-    def __init__(self):self.writes=[];self.closed=False
-    def open(self):pass
-    def close(self):self.closed=True
-    def execute(self,command,*,timeout):
-        self.writes.append(command);return CommandResult(command,0,'changed',.01)
-    def export_submission(self,path):path.write_text(str(len(self.writes)));return path
-    def grade_submission(self,path):
-        n=int(path.read_text());return {'status':'passed' if n>=2 else 'failed','task_success':n>=2,'gc':min(n/2,1)}
 
 
-class NativeOwner:
-    def __init__(self):self.session=self;self.writes=[];self.closed=False;self.active=False
-    def __enter__(self):return self
-    def close(self):self.closed=True
-    def observe(self):return {'writes':len(self.writes)}
-    def start_episode(self,instance):self.active=True
-    def stop_episode(self):self.active=False
-    def agent_call(self,name,args):
-        assert self.active
-        self.writes.append(args);return {'data':{'changed':True}}
-    def evaluate(self):
-        assert not self.active
-        n=len(self.writes);return {'status':'passed' if n>=2 else 'failed','complete':n>=2,'gc':min(n/2,1),'task_success':n>=2}
-    def observe_and_evaluate(self):return {'observation':self.observe(),'evaluation':self.evaluate()}
-    def export_receipts(self,path):path.write_bytes(b'receipts')
 
 
-def handle(tmp_path,domain,task_id='sample'):
-    root=tmp_path/'world';(root/'public').mkdir(parents=True);(root/'private').mkdir()
-    (root/'public/task.txt').write_text('Complete two real changes in the candidate.')
-    if domain=='engineering':
-        meta={'world_family':'platform_data'};owner=CodeWorld()
-    else:
-        meta={'scenario_family':'service_administration','tool_api_version':2};owner=NativeOwner()
-        (root/'private/initial.json').write_text('{"writes":0}')
-        (root/'private/agent_instructions.txt').write_text(business_guide(root))
-    b=seal_bundle(root,world_id=task_id,public_files=['public/task.txt'],metadata=meta)
-    h=open_task(task_record(b.root),tmp_path/'runtime',**({'world':owner} if domain=='engineering' else {'owner':owner}))
-    return h,owner
 
 
-def response(value):
-    if isinstance(value,list):
-        return ChatResponse('',model='scripted',usage={'prompt_tokens':4,'completion_tokens':2},
-            tool_calls=tuple({'id':'c'+str(i),'type':'function','function':{'name':n,'arguments':json.dumps(a)}}
-                             for i,(n,a) in enumerate(value)))
-    return ChatResponse(value,model='scripted',usage={'prompt_tokens':4,'completion_tokens':2})
 
 
-class Script:
-    config=SimpleNamespace(model='scripted',max_retries=0)
-    def __init__(self,values):self.values=iter(values);self.calls=[];self.lock=Lock()
-    def complete(self,messages,**options):
-        with self.lock:
-            self.calls.append((messages,options));value=next(self.values)
-        if isinstance(value,Exception):raise value
-        return response(value)
 
 
-def operations(domain):
-    if domain=='engineering':return [('terminal',{'command':'write '+str(i)}) for i in range(2)]
-    return [('call_tool',{'tool_name':'synthetic.write','arguments':{'value':i},'request_id':'r'+str(i)}) for i in range(2)]
 
 
-def scripted(method,domain):
-    ops=operations(domain)
-    if method=='aorchestra':
-        params={'task_instruction':'Make changes','model':'scripted'}
-        if domain=='engineering': params['tools']=['terminal']
-        values=[json.dumps({'action':'delegate_task','params':params})]
-        values += [json.dumps({'action':('execute' if domain=='engineering' else n),'params':a}) for n,a in ops]
-        values += [json.dumps({'action':'finish','params':{'status':'done','result':'two changes'}}),
-                   'Two changes observed.',json.dumps({'action':'submit','params':{}})]
-        return AOrchestra(),Script(values)
-    if method=='meta_team':return MetaTeam(),Script([[ops[0]],[ops[1]],[('set_final_output',{'output':'changed'})],[('terminate',{})]])
-    raise ValueError('Unsupported method: '+method)
 
 
 @pytest.mark.parametrize('domain',['engineering','operational'])
@@ -107,7 +37,6 @@ def test_original_methods_reach_both_task_families(tmp_path,method,domain):
     task,owner=handle(tmp_path,domain);baseline,client=scripted(method,domain)
     # The real model client imports LiteLLM before running the adapter. Its
     # first import initializes TIKTOKEN_CACHE_DIR; measure adapter changes only.
-    import litellm
     before=dict(os.environ);cwd=Path.cwd()
     # CLI callers commonly use relative output paths; native methods change cwd.
     result=run_episode(task,baseline,client,output=Path(os.path.relpath(tmp_path/'episode')),
@@ -486,15 +415,6 @@ def test_magentic_one_native_executor_failure_keeps_submission_and_scores(tmp_pa
         assert result['status']=='error' and result['error_type']=='RuntimeError',result
 
 
-def test_magentic_one_budget_stop_and_provider_failure_preserve_grading(tmp_path):
-    from mac_bench.baselines.magentic_one.tasks import MagenticOne
-    task, owner=handle(tmp_path,'engineering')
-    client=Script(['Given facts.'])
-    result=run_episode(task,MagenticOne(),client,output=tmp_path/'episode',
-        budget=AgentBudget(max_model_calls=1,max_tool_calls=20,max_tokens=10000,max_wall_seconds=30))
-    assert result['status']=='completed' and result['stop_reason']=='budget:model_calls',result
-    assert owner.closed and result['model_call_attempts']==1
-    assert result['agents_active_at_return']==0
 
 
 def test_magentic_one_replan_keeps_prior_world_edits(tmp_path):
@@ -514,19 +434,6 @@ def test_magentic_one_replan_keeps_prior_world_edits(tmp_path):
     assert 'Revised plan' in messages
 
 
-@pytest.mark.parametrize('failure', ['budget','provider'])
-def test_magentic_one_stops_after_write_without_losing_partial_state(tmp_path,failure):
-    from mac_bench.baselines.magentic_one.tasks import MagenticOne
-    task,owner=handle(tmp_path,'engineering')
-    values=['Facts.','Plan.',magentic_ledger('Coder'),'```sh\nwrite 0\n```',magentic_ledger('ComputerTerminal')]
-    if failure=='provider':values.append(RuntimeError('scripted provider failure'))
-    result=run_episode(task,MagenticOne(),Script(values),output=tmp_path/'episode',
-        budget=AgentBudget(max_model_calls=5 if failure=='budget' else 20,
-            max_tool_calls=20,max_tokens=10000,max_wall_seconds=30))
-    assert result['ps']==.5 and owner.closed and len(owner.writes)==1,result
-    assert result['agents_active_at_return']==0
-    if failure=='budget':assert result['stop_reason']=='budget:model_calls'
-    else:assert result['status']=='error' and result['error_type']=='RuntimeError'
 
 
 @pytest.mark.parametrize('domain',['engineering','operational'])
@@ -650,3 +557,27 @@ def test_meta_team_preserves_fatal_completion_errors(error):
     with pytest.raises(MethodStop) as caught:
         _propagate_completion_stop(stop)
     assert caught.value is stop
+
+@pytest.mark.parametrize('failure, completed_work, call_limit', [
+    ('budget', False, 1), ('budget', True, 5), ('provider', True, 20),
+])
+def test_magentic_one_interruption_preserves_progress(tmp_path, failure, completed_work, call_limit):
+    from mac_bench.baselines.magentic_one.tasks import MagenticOne
+    task, owner = handle(tmp_path, 'engineering')
+    values = ['Facts.']
+    if completed_work:
+        values += ['Plan.', magentic_ledger('Coder'), '```sh\nwrite 0\n```',
+                   magentic_ledger('ComputerTerminal')]
+    if failure == 'provider':
+        values.append(RuntimeError('scripted provider failure'))
+    result = run_episode(task, MagenticOne(), Script(values), output=tmp_path/'episode',
+        budget=AgentBudget(max_model_calls=call_limit, max_tool_calls=20,
+                           max_tokens=10000, max_wall_seconds=30))
+    assert owner.closed and result['agents_active_at_return'] == 0
+    assert len(owner.writes) == int(completed_work)
+    assert result['ps'] == (.5 if completed_work else 0), result
+    if failure == 'budget':
+        assert result['status'] == 'completed' and result['stop_reason'] == 'budget:model_calls'
+        assert result['model_call_attempts'] == call_limit
+    else:
+        assert result['status'] == 'error' and result['error_type'] == 'RuntimeError'

@@ -1,3 +1,4 @@
+from .support import LocalFixtureBackend
 import base64
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -20,51 +21,10 @@ from mac_bench.evaluation.tasks.execution import TaskExecution, TaskExecutionErr
 from mac_bench.evaluation.tasks.protocol import ToolDefinition
 from mac_bench.evaluation.tasks.tools import AgentEnvironment
 from mac_bench.runtime.agents.workflow import AgentBudget
-from mac_bench.runtime.sandbox.base import CommandResult
 
 
-class LocalFixtureBackend:
-    """Execute the same remote worker as a subprocess, only for fixture tests."""
-    def exec(self, sandbox, command, *, cwd=None, timeout):
-        started = time.monotonic()
-        process = subprocess.run(command, shell=True, cwd=cwd, timeout=timeout,
-                                 capture_output=True, text=True)
-        return CommandResult(command, process.returncode, process.stdout + process.stderr,
-                             time.monotonic() - started)
-
-    def open_channel(self, sandbox, *, argv, cwd):
-        return LocalChannel(argv, cwd)
-
-    def read_file(self, sandbox, *, path):
-        return Path(path).read_bytes()
 
 
-class LocalChannel:
-    def __init__(self, argv, cwd):
-        self.process = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
-
-    def write(self, data):
-        pending = memoryview(data)
-        while pending:
-            pending = pending[self.process.stdin.write(pending):]
-        self.process.stdin.flush()
-
-    def read(self):
-        while chunk := self.process.stdout.read(65536):
-            yield chunk
-
-    def close(self):
-        self.process.stdin.close()
-        try:
-            code = self.process.wait(timeout=10)
-            assert code == 0, self.process.stderr.read().decode()
-        finally:
-            if self.process.poll() is None:
-                self.process.kill()
-                self.process.wait()
-            self.process.stdout.close()
-            self.process.stderr.close()
 
 
 @pytest.fixture
@@ -297,7 +257,7 @@ def test_native_file_tools_share_state_and_reject_another_agents_stale_edit(file
         max_env_actions=50, max_tokens=100000, max_wall_seconds=60))
     context = SimpleNamespace(budget=budget, event=events.append)
     with WorldBridge(context, files) as bridge:
-        process = subprocess.run([node, str(root / 'tests/evaluation/superagent/filesystem_client.mts')],
+        process = subprocess.run([node, str(root / 'tests/baselines/superagent/filesystem_client.mts')],
             cwd=root, env={**os.environ, 'MAC_TEST_WORLD_URL': bridge.url,
                 'MAC_TEST_WORLD_KEY': bridge.token, 'MAC_TEST_WORKSPACE': str(tmp_path)},
             capture_output=True, text=True, timeout=40)
@@ -335,7 +295,7 @@ def test_parent_and_native_child_share_the_public_application_api(files, tmp_pat
     context = SimpleNamespace(environment=environment, budget=budget, event=events.append)
     try:
         with WorldBridge(context, files) as bridge:
-            process = subprocess.run([node, str(root / 'tests/evaluation/superagent/application_client.mts')],
+            process = subprocess.run([node, str(root / 'tests/baselines/superagent/application_client.mts')],
                 cwd=root, env={**os.environ, 'MAC_TEST_WORLD_URL': bridge.url, 'MAC_TEST_WORLD_KEY': bridge.token,
                     'MAC_TEST_WORKSPACE': str(tmp_path),
                     'MAC_TEST_TOOLS': json.dumps([tool.as_function()['function'] for tool in definitions])},
@@ -363,7 +323,7 @@ def test_remote_job_wakes_native_worker_and_hands_off_once(files, tmp_path):
         max_env_actions=50, max_tokens=100000, max_wall_seconds=60))
     context = SimpleNamespace(budget=budget, event=events.append)
     with WorldBridge(context, files) as bridge:
-        process = subprocess.run([node, str(root / 'tests/evaluation/superagent/process_client.mts')],
+        process = subprocess.run([node, str(root / 'tests/baselines/superagent/process_client.mts')],
             cwd=root, env={**os.environ, 'MAC_TEST_WORLD_URL': bridge.url,
                 'MAC_TEST_WORLD_KEY': bridge.token, 'MAC_TEST_WORKSPACE': str(tmp_path)},
             capture_output=True, text=True, timeout=35)
@@ -385,7 +345,7 @@ def test_remote_process_control_and_parallel_children(tmp_path, client, monkeypa
     context = SimpleNamespace(budget=budget, event=lambda event: None)
     try:
         with WorldBridge(context, execution) as bridge:
-            process = subprocess.run([node, str(root / 'tests/evaluation/superagent' / client)],
+            process = subprocess.run([node, str(root / 'tests/baselines/superagent' / client)],
                 cwd=root, env={**os.environ, 'MAC_TEST_WORLD_URL': bridge.url,
                     'MAC_TEST_WORLD_KEY': bridge.token, 'MAC_TEST_WORKSPACE': str(tmp_path)},
                 capture_output=True, text=True, timeout=30)
@@ -430,7 +390,7 @@ def test_instruction_discovery_batches_probes_and_refreshes_after_shell_edits(fi
         max_model_calls=50, max_tool_calls=50, max_env_actions=50, max_wall_seconds=60)),
         event=lambda event: None)
     with WorldBridge(context, files) as bridge:
-        process = subprocess.run([node, str(root / 'tests/evaluation/superagent/instructions_client.mts')],
+        process = subprocess.run([node, str(root / 'tests/baselines/superagent/instructions_client.mts')],
             cwd=root, env={**os.environ, 'MAC_TEST_WORLD_URL': bridge.url,
                 'MAC_TEST_WORLD_KEY': bridge.token, 'MAC_TEST_WORKSPACE': str(tmp_path),
                 'MAC_TEST_TIMING_FILE': str(timing_file)},
@@ -502,6 +462,8 @@ def test_business_workspace_contains_only_public_materials(tmp_path, monkeypatch
     task.bundle = SimpleNamespace(root=tmp_path)
     task.resources = SimpleNamespace(names=('public/task.txt', 'public/records.json'))
     task._configure(SimpleNamespace(tools=()))
+    from mac_bench.runtime.sandbox.providers import resolve_config
+    task._backend_config = resolve_config("business")
     task._scratch = task._execution = None
     task._execution = task._open_execution()
     assert json.loads((tmp_path / 'agent_workspace.json').read_text()) == {

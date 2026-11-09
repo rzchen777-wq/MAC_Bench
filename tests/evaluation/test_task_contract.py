@@ -44,7 +44,7 @@ def test_catalogue_classification_and_public_boundary(tmp_path,category):
     if category in {'product_application','platform_data','developer_release'}:
         task=open_task(r,tmp_path/'runtime',world=CodeWorld())
     else:
-        task=open_task(r,tmp_path/'runtime',owner=SimpleNamespace())
+        task=open_task(r,tmp_path/'runtime',owner=SimpleNamespace(backend=None))
     public=json.dumps(task.view.as_dict())
     assert 'PRIVATE ANSWER' not in public and str(b.root) not in public and 'evaluate' not in [t.name for t in task.view.tools]
     assert {t.name for t in task.view.tools}==({'terminal'} if category in {'product_application','platform_data','developer_release'} else {'list_apps','list_tools','describe_tool','call_tool','read_result','query_result','compute','list_resources','read_resource','query_resource','search_resource'})
@@ -251,9 +251,11 @@ def test_engineering_loader_keeps_support_files_out_of_task_document(tmp_path, m
             return SimpleNamespace(exit_code=0)
         def close(self):
             self.sandbox = None
-    monkeypatch.setattr(runtime, 'modal_backend', lambda *a, **kw: backend)
+    monkeypatch.setattr(runtime, 'create_backend', lambda *a, **kw: backend)
     world = object.__new__(runtime.LoadedProductWorld)
     world.runtime = Runtime()
+    world.backend = backend
+    world.prepared_image = None
     world.bundle = SimpleNamespace(root=root, manifest={'public_files': ['public/task.txt', 'public/fixtures.txt']})
     world.meta = {'workspace_archive': 'private/starter.tar'}
     world.environment = {'build': 'true', 'image': 'python:3.12', 'setup': []}

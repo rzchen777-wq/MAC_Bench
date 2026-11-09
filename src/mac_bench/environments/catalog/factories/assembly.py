@@ -1,5 +1,6 @@
 """Bind task resource contracts to native application clients."""
 from copy import deepcopy
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from mac_bench.environments.catalog.entities import CatalogError
@@ -16,11 +17,31 @@ class AppConnection:
     settings: dict = field(default_factory=dict)
 
 
+class _BindingContracts(Mapping):
+    """Resolve selected contracts and cross-binding dependencies on demand."""
+    def __init__(self, entities, bindings):
+        self.entities, self.bindings = entities, bindings
+        self._loaded = {}
+
+    def __iter__(self):
+        return iter(self.bindings)
+
+    def __len__(self):
+        return len(self.bindings)
+
+    def __getitem__(self, identity):
+        if identity not in self._loaded:
+            binding = self.bindings[identity]
+            self._loaded[identity] = self.entities.resolve(
+                binding['entity'], binding=identity)['contract']
+        return self._loaded[identity]
+
+
 class BuildContext:
     def __init__(self, entities):
         self.entities = entities
         self.bindings = {}
-        self.contracts = {}
+        self.contracts = _BindingContracts(entities, self.bindings)
         self.cards = {}
         self._types = {}
         for card in pages(entities.overview, role=None):
@@ -29,7 +50,6 @@ class BuildContext:
                 for identity in variant['bindings']:
                     binding = entities.binding(identity)
                     self.bindings[identity] = binding
-                    self.contracts[identity] = entities.resolve(card['id'], binding=identity)['contract']
 
     def types(self, library):
         if library not in self._types:

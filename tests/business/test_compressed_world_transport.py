@@ -1,7 +1,7 @@
 import base64,gzip,json,shlex
 from types import SimpleNamespace
 import pytest
-from mac_bench.environments.packaging.modal_session import ModalWorldSession
+from mac_bench.environments.packaging.session import WorldSession
 
 
 @pytest.mark.parametrize('size', [2, 10000])
@@ -28,7 +28,7 @@ def test_streaming_client_compresses_large_responses(monkeypatch, capsys, size):
 
 
 def test_joint_owner_capture_uses_one_observation():
-    class Session(ModalWorldSession):
+    class Session(WorldSession):
         def __init__(self):self.calls=[]
         def request(self,path,arguments):
             self.calls.append(path)

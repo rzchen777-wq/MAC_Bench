@@ -148,7 +148,6 @@ def test_summary_consumes_last_local_model_call_without_free_solver_request(trun
     from mac_bench.runtime.llm.client import ModelOutputTruncatedError
     from mac_bench.runtime.agents.workflow import ReactAgent,AgentBudget
     from mac_bench.runtime.types import PublicTask
-    from mac_bench.runtime.types import SolverWorkspace
     from mac_bench.runtime.tools import ToolSpec,ToolResult
     class Client:
         count=0
@@ -163,12 +162,12 @@ def test_summary_consumes_last_local_model_call_without_free_solver_request(trun
             return ChatResponse('Inspected state; task unfinished.',model='scripted',usage={'prompt_tokens':10,'completion_tokens':5})
     client=Client()
     tool=ToolSpec('inspect','Inspect state',{},(),lambda c,a:ToolResult.completed({'data':'x'*6000}))
-    agent=ReactAgent(client,None,workspace_tools=False,extra_tools=[tool],
+    agent=ReactAgent(client,[tool],
         budget=AgentBudget(max_model_calls=2,max_tool_calls=2,max_tokens=10000),
         model_max_tokens=500,output_limit=10000,
         context_policy=ContextPolicy(request_token_limit=2500,target_input_tokens=1200,summary_output_tokens=200),
         system_prompt='Rules',user_prompt='Task')
-    result=agent.run(task=PublicTask('id','type','Task'),workspace=SolverWorkspace(None,cwd='.',kind='artifact'))
+    result=agent.run(task=PublicTask('id','type','Task'))
     assert result.stop_reason=='model_call_budget' and result.model_calls==2==client.count
     assert result.input_tokens==(10 if truncated else 20) and result.output_tokens==(5 if truncated else 10)
 
@@ -225,7 +224,6 @@ def test_recent_turn_survives_even_when_above_soft_target():
 def test_revisiting_different_commands_does_not_trigger_repeated_action_stop():
     from mac_bench.runtime.agents.workflow import ReactAgent,AgentBudget
     from mac_bench.runtime.types import PublicTask
-    from mac_bench.runtime.types import SolverWorkspace
     from mac_bench.runtime.tools import ToolSpec,ToolResult
     commands=['read a','read b','read c','read d']*2
     class Client:
@@ -238,9 +236,9 @@ def test_revisiting_different_commands_does_not_trigger_repeated_action_stop():
     tool=ToolSpec('inspect','Read file',{'command':{'type':'string'}},('command',),
         lambda c,a:ToolResult.completed({'output':'source'}))
     client=Client()
-    agent=ReactAgent(client,None,workspace_tools=False,extra_tools=[tool],system_prompt='Rules',
+    agent=ReactAgent(client,[tool],system_prompt='Rules',
         user_prompt='Task',budget=AgentBudget(max_model_calls=12,max_tool_calls=12,max_tokens=10000))
-    result=agent.run(task=PublicTask('id','type','Task'),workspace=SolverWorkspace(None,cwd='.',kind='artifact'))
+    result=agent.run(task=PublicTask('id','type','Task'))
     assert result.stop_reason=='finished' and result.tool_calls==8
 
 

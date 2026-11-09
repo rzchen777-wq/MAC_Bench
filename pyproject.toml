@@ -28,6 +28,7 @@ Issues = "https://github.com/rzchen777-wq/MAC_Bench/issues"
 [project.optional-dependencies]
 agents = ["litellm>=1.0", "orjson>=3.9", "tqdm>=4.66", "numpy>=1.26", "fastapi>=0.110"]
 tool-api = ["mcp>=1.12,<2", "uvicorn>=0.30", "fastapi>=0.110"]
+daytona = ["daytona==0.193.0"]
 modal = ["modal[api-proxy-support]>=1.5"]
 meta_team = ["aiohttp>=3.9", "duckduckgo-search>=6", "docker>=7"]
 aorchestra = ["pydantic>=2,<3", "openai>=1"]

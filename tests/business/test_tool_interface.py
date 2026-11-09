@@ -10,7 +10,7 @@ from urllib.error import HTTPError
 import pytest
 
 from mac_bench.environments.errors import NativeGraphQLFailure, NativeHTTPFailure
-from mac_bench.environments.packaging.modal_session import ModalWorldSession
+from mac_bench.environments.packaging.session import WorldSession
 from mac_bench.environments.runtime.infrastructure.transport import RestTransport
 from mac_bench.environments.tools import (
     AppConnection,

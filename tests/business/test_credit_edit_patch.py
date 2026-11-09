@@ -2,7 +2,6 @@
 import json
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -14,10 +13,6 @@ from mac_bench.environments.apps.bigcapital.accounting_patch import (
 @pytest.fixture
 def node():
     executable = shutil.which('node')
-    if executable is None:
-        candidate = Path(__file__).resolve().parents[3] / '.cache/toolchain/node/bin/node'
-        if candidate.exists():
-            executable = str(candidate)
     if executable is None:
         pytest.skip('Node is needed to exercise native JavaScript')
     return executable

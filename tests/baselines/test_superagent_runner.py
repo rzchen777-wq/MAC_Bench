@@ -1,6 +1,5 @@
 """Exercise the production Python -> Node -> DSH -> public-world path."""
 import json
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,8 +17,8 @@ from mac_bench.evaluation.tasks.protocol import TaskView
 from mac_bench.evaluation.tasks.protocol import ToolDefinition
 from mac_bench.evaluation.tasks.tools import AgentEnvironment
 from mac_bench.evaluation.episodes.budget import BudgetExceeded
-from test_superagent_filesystem import LocalFixtureBackend
-from test_superagent_model_relay import recorder, sse, START
+from .support import LocalFixtureBackend
+from .support import recorder, sse, START
 
 
 def reply(value, sequence):

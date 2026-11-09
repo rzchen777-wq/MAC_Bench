@@ -13,11 +13,12 @@ pytest
 | `test_*.py` | Dataset indexes, downloads, packaging and documented examples |
 | `business/` | Business tools, permissions and partial-operation feedback |
 | `environments/` | Environment loading, reset, resource use and RPC transport |
-| `evaluation/` | Episode lifecycle, budgets, scoring and baseline adapters |
-| `runtime/` | Model interfaces, context management, terminal and workspace tools |
+| `evaluation/` | Episode lifecycle, budgets, scoring and shared task interfaces |
+| `baselines/` | Baseline configuration, orchestration, context management and native integrations |
+| `runtime/` | Model clients, sandbox backends and shared tool primitives |
 | `tasks/` | Public materials and outcome verifiers in the installed task packages |
 
-The tests use scripted model responses and local environments. They do not run paid model calls or start Modal sandboxes. Personal `.env` files are disabled during tests.
+The tests use scripted model responses and local environments. They do not run paid model calls or start Modal or Daytona sandboxes. Personal `.env` files are disabled during tests.
 
 ## Task packages
 
@@ -45,6 +46,8 @@ python scripts/fetch_baselines.py --name Magentic-One
 pip install -e '.[dev,agents,aorchestra,meta_team,magentic_one]'
 pytest --run-baselines
 ```
+
+The `baselines/` directory groups adapter tests with their native orchestration checks. `support.py` supplies scripted model replies and local test worlds.
 
 This adds tests of the original orchestration loops, worker messaging and interruption handling. Model responses remain scripted. Use `pytest --run-baselines -m baselines` to run only this group.
 

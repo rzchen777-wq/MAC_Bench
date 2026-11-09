@@ -5,14 +5,11 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence
+from typing import Any, Callable, Literal, Mapping, Sequence
 
 from jsonschema import Draft202012Validator
 
 from .protocol import function_tool_schema, parse_function_call
-
-if TYPE_CHECKING:
-    from .environment import ExecutionEnvironment
 
 
 class ToolErrorCode(StrEnum):
@@ -203,23 +200,10 @@ class ToolResult:
 
 @dataclass(frozen=True)
 class ToolContext:
-    environment: ExecutionEnvironment | None
     agent_id: str
     sample_id: str
     permissions: frozenset[str] = frozenset()
     capabilities: frozenset[str] = frozenset()
-    observed_versions: dict[str, str] = field(
-        default_factory=dict,
-        repr=False,
-        compare=False,
-    )
-
-    @property
-    def owner_scope(self) -> str:
-        return f"{self.sample_id}:{self.agent_id}"
-
-    def observe_version(self, path: str, version: str) -> None:
-        self.observed_versions[path] = version
 
 
 ToolHandler = Callable[[ToolContext, Mapping[str, Any]], ToolResult]

@@ -7,7 +7,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test ../../../../tests/evaluation/superagent/*.test.mts"
+    "test": "node --test ../../../../tests/baselines/superagent/*.test.mts"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.5-alpha.1",

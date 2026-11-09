@@ -139,7 +139,7 @@ assets/overview.png             Benchmark overview
 
 The viewer tables contain `task_id`, `domain`, `category`, `split`, `instruction`, `world_revision` and `package`. Task archives unpack to `manifest.json`, `public/` materials, environment resources and private evaluation files. Here, `private/` identifies evaluator-only files: the task loader exposes public materials and permitted operations to the agent.
 
-Business environments use Twenty, Pretix, HRMS and BigCapital. Initial records and configuration are packaged with each task; common application layers are stored once in the OCI directory. Software tasks provide starter workspaces and dependency recipes. Modal prepares and caches task environments while each episode receives independent task state.
+Business environments use Twenty, Pretix, HRMS and BigCapital. Initial records and configuration are packaged with each task; common application layers are stored once in the OCI directory. Software tasks provide starter workspaces and dependency recipes. Modal or Daytona prepares and caches task environments while each episode receives independent task state.
 
 <a id="evaluation"></a>
 
@@ -147,7 +147,7 @@ Business environments use Twenty, Pretix, HRMS and BigCapital. Initial records a
 
 **Progress Score (PS)** measures satisfied task goals. **Resolution Rate (RR)** measures complete task success. Outcomes are checked through application records and software artifacts. Agent roles, communication and work allocation are chosen by the evaluated system.
 
-After configuring Modal and a model endpoint, a development episode can be run with:
+After configuring a sandbox provider and a model endpoint, run a development episode with:
 
 ```bash
 mac-bench evaluate \
@@ -158,7 +158,7 @@ mac-bench evaluate \
   --out outputs/preschool-react
 ```
 
-These are example run limits. Evaluation outputs include scores, tool interactions, model calls and token usage. Follow the [getting-started guide](https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/getting-started.md) for Modal and model setup, or the [agent integration guide](https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/agents.md) to evaluate your own system.
+These are example run limits. Evaluation outputs include scores, tool interactions, model calls and token usage. Follow the [getting-started guide](https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/getting-started.md) for installation and model setup, the [environment guide](https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/environments.md#choose-modal-or-daytona) to choose Modal or Daytona, or the [agent integration guide](https://github.com/rzchen777-wq/MAC_Bench/blob/main/docs/agents.md) to evaluate your own system.
 
 ## License
 

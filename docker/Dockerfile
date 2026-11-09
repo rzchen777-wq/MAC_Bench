@@ -9,7 +9,7 @@ COPY configs ./configs
 COPY data/public_tasks.json ./data/public_tasks.json
 COPY data/tasks.json ./data/tasks.json
 COPY data/distribution.json ./data/distribution.json
-RUN pip install --no-cache-dir -e '.[modal,agents]'
+RUN pip install --no-cache-dir -e '.[modal,daytona,agents]'
 ENV MAC_BENCH_ROOT=/opt/mac-bench PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 ENTRYPOINT ["mac-bench"]
 CMD ["tasks", "list"]

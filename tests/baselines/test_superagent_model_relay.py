@@ -1,7 +1,7 @@
+from .support import END, Fragments, START, STREAM, post, recorder, sse
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -9,61 +9,18 @@ import pytest
 pytestmark = pytest.mark.superagent
 
 from mac_bench.baselines.superagent.model_relay import ModelRelay, MessagesUsage
-from mac_bench.evaluation.episodes.recording import RecordingClient
-from mac_bench.evaluation.episodes.budget import EpisodeBudget, BudgetExceeded
-from mac_bench.runtime.agents.workflow import AgentBudget
+from mac_bench.evaluation.episodes.budget import BudgetExceeded
 from mac_bench.runtime.llm.config import LLMConfig
 
 
-def sse(*events):
-    return b''.join(b'event: ' + event['type'].encode() + b'\r\ndata: '
-                    + json.dumps(event).encode() + b'\r\n\r\n' for event in events)
 
 
-START = {'type': 'message_start', 'message': {'id': 'msg-fixture', 'type': 'message',
-    'role': 'assistant', 'model': 'deepseek-v4-flash', 'content': [],
-    'stop_reason': None, 'stop_sequence': None,
-    'usage': {'input_tokens': 7, 'output_tokens': 0, 'cache_read_input_tokens': 11,
-              'cache_creation_input_tokens': 3}}}
-END = {'type': 'message_delta', 'delta': {'stop_reason': 'end_turn', 'stop_sequence': None},
-       'usage': {'output_tokens': 5}}
-STREAM = sse(START,
-    {'type': 'content_block_start', 'index': 0,
-     'content_block': {'type': 'thinking', 'thinking': ''}},
-    {'type': 'content_block_delta', 'index': 0,
-     'delta': {'type': 'thinking_delta', 'thinking': 'Read the public requirements.'}},
-    {'type': 'content_block_delta', 'index': 0,
-     'delta': {'type': 'signature_delta', 'signature': 'fixture-signature'}},
-    {'type': 'content_block_stop', 'index': 0},
-    {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'text', 'text': ''}},
-    {'type': 'content_block_delta', 'index': 1,
-     'delta': {'type': 'text_delta', 'text': 'The shared workspace is ready.'}},
-    {'type': 'content_block_stop', 'index': 1}, END, {'type': 'message_stop'})
 
 
-class Fragments(httpx.SyncByteStream):
-    def __init__(self, data):
-        self.data = data
-
-    def __iter__(self):
-        for i in range(0, len(self.data), 7):
-            yield self.data[i:i + 7]
 
 
-def recorder(tmp_path, calls=20):
-    config = LLMConfig('https://api.deepseek.com', 'provider-secret', 'deepseek-v4-flash',
-                       timeout_seconds=2, max_retries=0)
-    budget = EpisodeBudget(AgentBudget(max_model_calls=calls, max_tool_calls=20,
-        max_env_actions=20, max_tokens=10000, max_wall_seconds=120))
-    return RecordingClient(SimpleNamespace(config=config), tmp_path / 'calls', budget=budget)
 
 
-def post(relay, session='worker-a', request=None):
-    body = json.dumps(request or {'model': relay.config.model, 'stream': True, 'max_tokens': 128,
-                                 'messages': [{'role': 'user', 'content': 'hello'}]}).encode()
-    return httpx.post(relay.base_url + '/v1/messages', content=body, headers={
-        'x-api-key': relay.token, 'x-deepseek-harness-session-id': session,
-        'x-deepseek-harness-compact': '1' if session == 'compact' else '0'}, timeout=5, trust_env=False)
 
 
 def test_relay_preserves_stream_and_accounts_concurrent_native_calls(tmp_path):
@@ -161,7 +118,7 @@ def test_native_dsh_replays_reasoning_through_recorded_transport(tmp_path):
         return httpx.Response(200, headers={'content-type': 'text/event-stream'}, stream=Fragments(STREAM))
 
     with ModelRelay(client, transport=httpx.MockTransport(provider)) as relay:
-        result = subprocess.run([node, str(root / 'tests/evaluation/superagent/relay_client.mts')],
+        result = subprocess.run([node, str(root / 'tests/baselines/superagent/relay_client.mts')],
             cwd=root, env={**os.environ, 'MAC_TEST_RELAY_URL': relay.base_url,
                            'MAC_TEST_RELAY_KEY': relay.token}, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr + result.stdout

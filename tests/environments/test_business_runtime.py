@@ -1,7 +1,7 @@
 """Portable startup preserves dependencies and native process budgets."""
 from types import SimpleNamespace
 import pytest
-from mac_bench.environments.packaging.modal_session import ModalWorldSession
+from mac_bench.environments.packaging.session import WorldSession
 from mac_bench.environments.business.services import BusinessServices
 from mac_bench.environments.business.containers import BusinessEnvironmentError
 
@@ -42,3 +42,16 @@ exec celery -A pretix.celery_app worker -l info "$@"
     assert 'NUM_WORKERS=2' in result and 'worker -l info --concurrency=2' in result
     assert 'AUTOMIGRATE=skip' in result
     with pytest.raises(RuntimeError):_bounded_pretix(b'unknown startup')
+
+
+def test_hrms_disables_only_reload_preserving_workers_and_threaded_serving():
+    from mac_bench.environments.packaging.background import _bounded_hrms_web, _paused_procfile
+    source = (b'web: bench serve  --port 8000\n\nsocketio: node socketio.js\n'
+              b'schedule: bench schedule\nworker:  bench worker 1>> logs/worker.log\n')
+    paused = _paused_procfile(source)
+    result = _bounded_hrms_web(paused)
+    assert result == paused.replace(b'--port 8000', b'--port 8000 --noreload')
+    assert _bounded_hrms_web(result) == result
+    for invalid in (b'', b'web: unknown server\n', source + b'web: bench serve --port 8000\n'):
+        with pytest.raises(RuntimeError, match='HRMS web configuration'):
+            _bounded_hrms_web(invalid)

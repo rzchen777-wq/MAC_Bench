@@ -7,11 +7,11 @@ from .product.verifier import score_product
 
 
 class ArtifactRuntime(ProductRuntime):
-    def open(self, *, snapshot=None, network_blocked=False):
-        if not snapshot:
+    def open(self, *, prepared=None, network_blocked=False):
+        if not prepared:
             raise ValueError('Artifact grading requires a clean infrastructure snapshot')
-        self.infrastructure_snapshot = snapshot
-        return super().open(snapshot=snapshot, network_blocked=network_blocked)
+        self.infrastructure_image = prepared
+        return super().open(prepared=prepared, network_blocked=network_blocked)
 
     def verify(self, verifier_directory, contract, *, mode='normal'):
         config = self.environment['artifact_verifier']
@@ -26,7 +26,7 @@ class ArtifactRuntime(ProductRuntime):
             archive.write_bytes(self.read_archive('/work/deliverables.tar'))
             check_archive(archive, external_symlink_targets=config.get('external_symlink_targets', []))
             # Use the infrastructure snapshot, not a snapshot of this producer.
-            consumer.open(snapshot=self.infrastructure_snapshot, network_blocked=True)
+            consumer.open(prepared=self.infrastructure_image, network_blocked=True)
             self.backend.write_file(consumer.sandbox, path='/work/deliverables.tar', content=archive.read_bytes())
             self.backend.upload_tree(consumer.sandbox, local_dir=verifier_directory, remote_dir='/work/checks')
             result = consumer.command('consume', config['consumer_command'], timeout=config.get('consumer_timeout', 120))

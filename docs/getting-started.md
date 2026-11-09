@@ -90,7 +90,7 @@ MAC_BENCH_LLM_API_KEY=your-api-key
 MAC_BENCH_LLM_MODEL=your-model-name
 ```
 
-The provider URL above is a placeholder for your endpoint. Modal authentication is saved by `modal token new`. Your agent and the evaluator run locally, while task applications run in a Modal sandbox.
+The provider URL above is a placeholder for your endpoint. Modal authentication is saved by `modal token new`. Your agent and the evaluator run locally, while task applications run in a sandbox. Both domains also support [Daytona](environments.md#choose-modal-or-daytona): install `.[daytona,agents]`, set `DAYTONA_API_KEY`, `MAC_BENCH_BUSINESS_PROVIDER=daytona`, and `MAC_BENCH_SOFTWARE_PROVIDER=daytona`.
 
 ## 4. Preview the run
 
@@ -122,7 +122,7 @@ mac-bench environment check \
   --out outputs/preschool-environment
 ```
 
-This starts the environment, verifies the initial records, resets it, checks again and closes it. In `report.json`, `initial.matches: true` and `reset.matches: true` indicate that both checks passed. The check uses Modal compute, with no model calls.
+This starts the environment, verifies the initial records, resets it, checks again and closes it. In `report.json`, `initial.matches: true` and `reset.matches: true` indicate that both checks passed. The check uses the selected cloud provider, with no model calls.
 
 ## 5. Run and inspect the episode
 

@@ -2,42 +2,67 @@
 
 [Home](../README.md) · [Getting started](getting-started.md) · [Tasks](tasks.md) · [Evaluation](evaluation.md) · [Agent integration](agents.md) · **Environments**
 
-The evaluator and agent system run on your machine; Modal hosts isolated task environments. First use prepares the required image. Later episodes reuse the prepared image and load independent task states.
+The evaluator and agent system run on your machine. Modal or Daytona hosts the task environment. Each episode loads an independent task state; prepared images are reused between episodes.
 
-Install `pip install -e '.[modal,agents]'`, load the dataset, and authenticate with `modal token new`. The [getting-started guide](getting-started.md) covers this sequence.
+## Choose Modal or Daytona
+
+Select the provider for each task family:
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `MAC_BENCH_BUSINESS_PROVIDER` | `modal`, `daytona` | `modal` |
+| `MAC_BENCH_SOFTWARE_PROVIDER` | `modal`, `daytona` | `modal` |
+
+The business provider also hosts the agent's script workspace. The software provider hosts the task workspace, independent grader and package consumer. A running task retains its selected backend and prepared image through grading and reset.
+
+**Modal**
+
+```bash
+pip install -e '.[modal,agents]'
+modal token new
+```
+
+**Daytona**
+
+```bash
+pip install -e '.[daytona,agents]'
+export DAYTONA_API_KEY='your-key'
+export MAC_BENCH_BUSINESS_PROVIDER=daytona
+export MAC_BENCH_SOFTWARE_PROVIDER=daytona
+```
+
+These settings can also be saved in the checkout's `.env`; exported environment variables take precedence.
+
+`DAYTONA_TARGET` defaults to `us`; `DAYTONA_API_URL` defaults to `https://app.daytona.io/api`. Both providers load the same task packages and use the same task tools, initial-state checks and verifiers.
 
 ## Business operations
 
-Business tasks use Twenty, Pretix, HRMS and BigCapital as required by the task. Shared application images provide the services; per-task data supplies the initial records and configuration.
+Business tasks use Twenty, Pretix, HRMS and BigCapital. OCI application images provide the services; each task supplies its configuration, initial records and public materials.
 
 ```text
-data/environments/images/             Shared application images (OCI)
+data/environments/images/             Application images and shared OCI layers
 data/tasks/<task_id>/environment/      Task configuration and initial data
 ```
 
-On first use, the loader imports the application images and caches the prepared VM, then restores the task data. Shared OCI layers are reused across tasks. `mac-bench data download` installs the selected tasks' image layers and the small shared OCI metadata index; loading a task requires no other task's image layers. Each episode receives an independent environment; resets recreate its containers and restore the initial volumes. Initial records are checked after loading and resetting.
+`mac-bench data download` retrieves the selected tasks' image layers and the shared metadata index. On first use, the loader prepares a cloud image from these resources. Subsequent episodes reuse it, start the applications and check the initial records. Reset recreates containers and restores the task's initial volumes.
 
-The environment cache follows application configuration, initial data, and image contents. Editing task instructions, tool bindings, or verifiers reuses that cache and installs the current runtime when opening the task. Resets reuse the installed runtime.
-
-The default business VM has **4 CPUs and 8 GiB of memory**. Pretix runs two web workers and two background workers. Independent applications start concurrently, and tool calls reuse a persistent connection. Set VM CPU and memory allocations with `MAC_BENCH_CPUS` and `MAC_BENCH_MEMORY_MIB`. Local preparation records are stored under `.cache/business/<task_id>/`.
+Application state determines the preparation cache key. The current tool code and verifier are installed when opening an episode. Independent applications start concurrently; tool calls reuse a persistent connection. Modal caches imported Docker images. Daytona imports OCI layers when a new sandbox opens and releases transfer files as they are consumed. Reset reuses the imported images on both platforms.
 
 ## Software engineering
 
-Software tasks have a dependency image and a per-episode source workspace. The loader installs base and locked dependencies in one sandbox and saves a single dependency image. It loads starter code and public fixtures, then runs the task's initialization command. Private tests run in a separate grading sandbox.
+Software environments contain the compilers and locked dependencies required by the task. Preparation installs these once in a clean sandbox and saves a dependency image. Each episode loads starter source and public fixtures into a fresh workspace, then runs the task's initialization command.
 
-Prepare an image ahead of evaluation:
+Submitted code is graded in a separate sandbox using the same dependency image. Package tasks also use an independent consumer to check generated artifacts. Task commands and grading run offline, with localhost available for application tests. Reset creates a fresh workspace from the initial source.
+
+Prepare dependencies ahead of an evaluation:
 
 ```bash
 mac-bench environment prepare --task-id flit_packages
 ```
 
-Add `--rebuild` to prepare the image again. The cache is replaced after preparation succeeds; running episodes keep their selected image.
-
-Tasks with the same dependency recipe can reuse the cached image while receiving separate workspaces. Local dependency records live in `.cache/environments/`; set `MAC_BENCH_ENVIRONMENT_CACHE` to choose another directory.
+Add `--rebuild` to prepare a new image from the original base. The cache record is replaced after preparation succeeds. Tasks with the same dependency recipe reuse the image.
 
 ## Check loading and reset
-
-Inspect local metadata, then perform a complete load/reset check:
 
 ```bash
 mac-bench environment describe --task-id op26_service_administration_007
@@ -45,9 +70,7 @@ mac-bench environment check \
   --task-id op26_service_administration_007 --out outputs/environment-check
 ```
 
-`describe` reads metadata without launching a sandbox. `check` opens the environment, checks its initial state, resets it, checks again and closes it. The check uses cloud compute but no model calls.
-
-A successful preschool check reports these fields in `report.json`:
+`describe` reads local metadata. `check` launches a sandbox, checks the initial state, resets it, checks again and closes it. It uses cloud compute without model calls. For a business task, `report.json` includes:
 
 ```json
 {
@@ -56,30 +79,33 @@ A successful preschool check reports these fields in `report.json`:
 }
 ```
 
-This excerpt omits the task identity, digests and runtime details in the full report. A matching digest after reset confirms that the observed state returned to its starting point.
+The full report also records the task identity, state digests and runtime details.
 
-## Lifecycle and resource settings
+## Resources and cache
 
-All workers in an episode share one environment. Software command tools share a 6 GiB resident-memory budget across concurrent commands and their subprocesses. If the total exceeds it, the largest command is stopped while the workspace remains available. Independent episodes receive isolated environments. The evaluator closes task and grader sandboxes when an episode finishes or raises an error; prepared images and local output files remain available for reuse or inspection.
+Business and software task hosts default to **4 CPUs and 8 GiB RAM**. Daytona allocates **10 GiB disk** by default and requires whole CPU cores and GiB memory allocations. A separate business script workspace uses 0.5 CPU / 512 MiB on Modal or 1 CPU / 1 GiB on Daytona.
 
-| Setting or location | Purpose |
+| Setting | Purpose |
 | --- | --- |
-| `MAC_BENCH_CPUS` | Business VM CPU allocation; default 4 |
-| `MAC_BENCH_MEMORY_MIB` | Business VM memory; default 8192 MiB |
-| `MAC_BENCH_ENVIRONMENT_CACHE` | Software dependency cache directory |
-| `.cache/business/<task_id>/` | Business environment preparation records |
-| `.cache/environments/` | Software dependency image records |
-| Evaluation `--out` directory | Episode results and logs |
+| `MAC_BENCH_CPUS` | Business host CPU allocation |
+| `MAC_BENCH_MEMORY_MIB` | Business host memory in MiB |
+| `MAC_BENCH_DAYTONA_DISK_GIB` | Daytona task disk allocation |
+| `MAC_BENCH_ENVIRONMENT_CACHE` | Prepared-image record directory; default `.cache/environments/` |
+| Evaluation `--out` | Episode results and logs |
 
-Removing a local cache record triggers preparation again. Remote images and task data remain separate. Use [Modal's dashboard](https://modal.com/apps) to inspect active resources in your account.
+Preparation records are stored as `<business|software>/<modal|daytona>/<cache-key>/image.json`. They identify the cloud image, input recipe and provider scope. Cache entries are locked during preparation and checked against the cloud before reuse. Each run records its selected image in its environment diagnostics.
+
+All agents in an episode share the task state. Software commands share a 6 GiB resident-memory budget, including subprocesses; the largest command is stopped if their combined usage exceeds it. Evaluation budgets, individual command timeouts and provider lifecycle settings serve different purposes. The evaluator closes task, grader and workspace sandboxes at episode end. Modal task hosts have a two-hour maximum lifetime; Daytona reclaims sandboxes after two hours of inactivity. Prepared images remain available in your cloud account.
+
+Deleting a preparation record causes a fresh preparation on the next use. Inspect cloud resources in the [Modal dashboard](https://modal.com/apps) or [Daytona dashboard](https://app.daytona.io).
 
 ## Docker client and build contexts
 
-The [Docker guide](../docker/README.md) runs the evaluation client in a container with the same Modal task loaders. It also explains how to export Docker build contexts for software dependencies and task workspaces:
+The [Docker guide](../docker/README.md) runs the evaluation client in a container with either cloud backend. To export software dependency and workspace build materials:
 
 ```bash
 mac-bench environment docker-context \
   --task-id flit_packages --out outputs/docker/flit_packages
 ```
 
-The exported `base/` and `task/` directories contain Dockerfiles and build instructions. Business application images are distributed in OCI format.
+The exported `base/` and `task/` directories contain Dockerfiles and build instructions. Business application images use OCI format.

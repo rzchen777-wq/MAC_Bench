@@ -21,7 +21,7 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install search dependency
         run: sudo apt-get update && sudo apt-get install -y ripgrep
-      - run: python -m pip install -e '.[dev,agents]'
+      - run: python -m pip install -e '.[dev,agents,daytona]'
       - run: mac-bench doctor
       - run: mac-bench tasks list --split test --json
       - run: pytest

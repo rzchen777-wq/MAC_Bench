@@ -18,14 +18,33 @@ def _paused_procfile(content):
     return after
 
 
-_PAUSE = 'import hashlib,json,pathlib,subprocess\n' + inspect.getsource(_paused_procfile) + r'''
+def _bounded_hrms_web(content):
+    """Keep threaded native serving without a development reload supervisor."""
+    lines = content.decode().splitlines(keepends=True)
+    web = [i for i, line in enumerate(lines) if line.partition(':')[0].strip() == 'web']
+    if len(web) != 1:
+        raise RuntimeError('Unexpected pinned HRMS web configuration')
+    index = web[0]
+    command = shlex.split(lines[index].partition(':')[2])
+    expected = ['bench', 'serve', '--port', '8000']
+    if command == expected:
+        line = lines[index].rstrip('\r\n')
+        lines[index] = line + ' --noreload' + lines[index][len(line):]
+    elif command != [*expected, '--noreload']:
+        raise RuntimeError('Unexpected pinned HRMS web configuration')
+    return ''.join(lines).encode()
+
+
+_PAUSE = ('import hashlib,json,pathlib,shlex,subprocess\n' + inspect.getsource(_paused_procfile)
+          + '\n' + inspect.getsource(_bounded_hrms_web)) + r'''
 path=pathlib.Path('/work/benchmark-hrms-Procfile')
 subprocess.run(['docker','cp','runtime-hrms:/home/frappe/frappe-bench/Procfile',str(path)],check=True,capture_output=True)
 before=path.read_bytes()
-after=_paused_procfile(before)
+paused=_paused_procfile(before)
+after=_bounded_hrms_web(paused)
 path.write_bytes(after)
 subprocess.run(['docker','cp',str(path),'runtime-hrms:/home/frappe/frappe-bench/Procfile'],check=True,capture_output=True)
-print(json.dumps({'policy':'hrms_periodic_scheduler_paused_v1','container':'runtime-hrms','before_sha256':hashlib.sha256(before).hexdigest(),'after_sha256':hashlib.sha256(after).hexdigest(),'removed_process':'schedule' if before!=after else None,'already_paused':before==after,'retained_processes':['web','worker']}))
+print(json.dumps({'policy':'hrms_periodic_scheduler_paused_v1','container':'runtime-hrms','before_sha256':hashlib.sha256(before).hexdigest(),'after_sha256':hashlib.sha256(after).hexdigest(),'removed_process':'schedule' if before!=paused else None,'already_paused':before==paused,'web_auto_reload':False,'retained_processes':['web','worker']}))
 '''
 
 

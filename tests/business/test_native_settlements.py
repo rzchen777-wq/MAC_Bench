@@ -13,12 +13,11 @@ from mac_bench.environments.tools.adapters.rest import credit_refund_date_schema
 from mac_bench.environments.tools.contracts import validate, ToolError
 
 FIXTURES = json.loads((Path(__file__).parent/'fixtures/accounting_commands.json').read_text())
-NODE = Path(__file__).resolve().parents[3]/'.cache/toolchain/node/bin/node'
 
 
 def run(name, program):
     import shutil
-    node = shutil.which('node') or (str(NODE) if NODE.exists() else None)
+    node = shutil.which('node')
     if node is None:
         pytest.skip('Node is required for native command behavior')
     f = FIXTURES[name]

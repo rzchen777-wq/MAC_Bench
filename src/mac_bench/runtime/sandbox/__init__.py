@@ -1,3 +1,5 @@
 """Native sandbox backend contracts."""
-from .base import CommandResult, SandboxBackend, SandboxHandle, BackendProcessHandle, BackendProcessSnapshot
-from .memory import MemorySandboxBackend
+
+from .base import CommandResult, PreparedImage, SandboxBackend, SandboxHandle
+
+__all__ = ["CommandResult", "PreparedImage", "SandboxBackend", "SandboxHandle"]

@@ -1,4 +1,4 @@
-"""Modal code worlds and independent grading; no native-app/Docker assumptions."""
+"""Isolated code workspaces and independent grading on Modal or Daytona."""
 
 import base64
 import gzip
@@ -8,15 +8,13 @@ import shlex
 import time
 from pathlib import Path
 
-from .artifacts import fingerprint, write_json
+from .artifacts import write_json
 from .verifier import score_product
 from ..public_workspace import initialization_commands
 
 
-def modal_backend(directory, timeout=7200):
-    from mac_bench.runtime.sandbox.modal import ModalSandboxBackend
-    return ModalSandboxBackend(timeout=timeout, cpu=4, memory_mib=8192,
-                               snapshot_directory=Path(directory))
+from mac_bench.runtime.sandbox.providers import create_backend, resolve_config
+from ..preparation import read_environment, prepare_environment
 
 
 class ProductRuntime:
@@ -24,7 +22,7 @@ class ProductRuntime:
         self.environment = environment
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self.backend = backend or modal_backend(self.directory / "provider")
+        self.backend = backend or create_backend(resolve_config('software'))
         self.sandbox = None
 
     def command(self, name, command, *, timeout=1200):
@@ -38,11 +36,11 @@ class ProductRuntime:
                    "duration_seconds": result.duration_seconds})
         return result
 
-    def open(self, *, snapshot=None, network_blocked=False):
+    def open(self, *, prepared=None, network_blocked=False):
         if self.sandbox is not None:
             raise RuntimeError("Runtime is already open")
         arguments = {"name": "product-world", "network_blocked": network_blocked}
-        arguments.update({"snapshot": snapshot} if snapshot else {"image": self.environment["image"]})
+        arguments.update({"prepared": prepared} if prepared else {"image": self.environment["image"]})
         self.sandbox = self.backend.create(**arguments)
         write_json(self.directory / "sandbox.json", {"id": self.sandbox.id,
                    "status": "running", "created_at": time.time(),
@@ -169,14 +167,16 @@ class ProductRuntime:
                             timeout=self.environment.get("health_timeout", 1800))
 
     def verify(self, verifier_directory, contract, *, mode="normal"):
-        from modal.exception import SandboxFilesystemNotFoundError
         self.backend.upload_tree(self.sandbox, local_dir=verifier_directory, remote_dir="/work/grader")
         result = self.command("verify-" + mode,
                               "set -e; cd /work/project; " + self.environment["verify"],
                               timeout=self.environment.get("verify_timeout", 900))
         try:
-            execution = json.loads(self.backend.read_file(self.sandbox, path="/work/grader/result.json"))
-        except (OSError, ValueError, SandboxFilesystemNotFoundError) as error:
+            report = self.command("verifier-result-" + mode, "cat /work/grader/result.json", timeout=60)
+            if report.exit_code:
+                raise OSError("Verifier did not write result.json")
+            execution = json.loads(report.stdout)
+        except (OSError, ValueError) as error:
             if result.exit_code == 1 and 'RuntimeError: Application startup failed; inspect server.log' in result.stdout:
                 server = self.command('candidate-startup-log', 'cat /work/grader/server.log')
                 if server.exit_code == 0 and 'Traceback' in server.stdout:
@@ -202,72 +202,6 @@ class ProductRuntime:
         self.close()
 
 
-def read_environment(directory):
-    """Read the dependency recipe and its package-manager lock files."""
-    directory=Path(directory)
-    environment=json.loads((directory/'private/environment.json').read_text())
-    if environment.get('dependency_files'):
-        environment['dependency_contents']={name:(directory/path).read_text()
-            for name,path in environment['dependency_files'].items()}
-    return environment
-
-
-def dependency_cache(environment):
-    import os
-    from mac_bench.runtime.paths import repository_root
-    recipe={'image': environment['image'], 'setup': environment['setup']}
-    if environment.get('dependency_contents'):
-        recipe.update(dependency_setup=environment['dependency_setup'],
-                      dependency_contents=environment['dependency_contents'],
-                      dependency_preparation='single-sandbox')
-    key = fingerprint(recipe)
-    root = Path(os.environ.get('MAC_BENCH_ENVIRONMENT_CACHE', repository_root()/'.cache/environments'))
-    return root / key, 'mac-bench-base-' + key
-
-
-def prepare_environment(environment, run, *, rebuild=False):
-    """Prepare one dependency snapshot, then pin its receipt to this run."""
-    import fcntl
-    import os
-    import shutil
-    import tempfile
-    cache, name = dependency_cache(environment)
-    cache.mkdir(parents=True, exist_ok=True)
-    receipt_name = sha256(name.encode()).hexdigest() + '.json'
-    receipt = cache / 'environment/provider' / receipt_name
-    with (cache / 'prepare.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if rebuild or not receipt.is_file():
-            # Prepare independently so a failed rebuild leaves the usable cache
-            # intact. No intermediate snapshot is captured or restored.
-            with tempfile.TemporaryDirectory(prefix='prepare-', dir=cache) as temporary:
-                runtime = ProductRuntime(environment, Path(temporary))
-                try:
-                    runtime.open()
-                    result = runtime.command('setup', environment['setup'],
-                                             timeout=environment.get('setup_timeout', 1800))
-                    if result.exit_code:
-                        raise RuntimeError('Dependency setup failed: ' + result.stdout[-4000:])
-                    if environment.get('dependency_contents'):
-                        runtime.backend.write_files(runtime.sandbox, files={
-                            '/opt/mac-bench-dependencies/' + filename: content.encode()
-                            for filename, content in environment['dependency_contents'].items()})
-                        result = runtime.command('dependencies', environment['dependency_setup'],
-                                                 timeout=environment.get('setup_timeout', 1800))
-                        if result.exit_code:
-                            raise RuntimeError('Locked dependency setup failed: ' + result.stdout[-4000:])
-                    runtime.backend.create_snapshot(runtime.sandbox, name=name, timeout=600)
-                finally:
-                    runtime.close()
-                receipt.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(Path(temporary) / 'provider' / receipt_name, receipt)
-        provider = Path(run) / 'environment/provider'
-        provider.mkdir(parents=True, exist_ok=True)
-        target = provider / receipt_name
-        if target.resolve() != receipt.resolve():
-            shutil.copyfile(receipt, target)
-    write_json(Path(run) / 'environment/environment.json', {'snapshot': name, 'cache': str(cache)})
-    return name
 
 
 class LoadedProductWorld:
@@ -285,21 +219,20 @@ class LoadedProductWorld:
         self.directory = Path(directory)
         self.environment = read_environment(self.bundle.root)
         self.contract = json.loads((self.bundle.root / "private/contract.json").read_text())
-        self.runtime = self.runtime_type(self.environment, self.directory / "agent", backend=backend)
+        self.backend = backend or create_backend(resolve_config('software'))
+        self.prepared_image = None
+        self.runtime = self.runtime_type(self.environment, self.directory / "agent", backend=self.backend)
 
     def open(self, *, rebuild_environment=False):
         if self.runtime.sandbox is not None:
             raise RuntimeError("Product world is already open")
-        import os
-        rebuild_environment = rebuild_environment or os.environ.get('MAC_BENCH_REBUILD_ENVIRONMENT') == '1'
-        self.snapshot = prepare_environment(self.environment, self.directory,
-                                            rebuild=rebuild_environment)
-        self.provider_directory = self.directory / 'environment/provider'
-        self.runtime.backend = modal_backend(self.provider_directory)
+        if self.prepared_image is None or rebuild_environment:
+            self.prepared_image = prepare_environment(self.environment, self.directory,
+                backend=self.backend, rebuild=rebuild_environment)
         try:
             # All dependencies are in the infrastructure snapshot. Candidate
             # code must not retrieve the removed implementation from upstream.
-            self.runtime.open(snapshot=self.snapshot, network_blocked=True)
+            self.runtime.open(prepared=self.prepared_image, network_blocked=True)
             self.runtime.install_source(self.bundle.root / self.meta["workspace_archive"])
             files = {'/work/' + name: (self.bundle.root / name).read_bytes()
                      for name in self.bundle.manifest['public_files']}
@@ -346,10 +279,10 @@ class LoadedProductWorld:
         submission = Path(submission)
         check_archive(submission)
         grader = self.runtime_type(self.environment, self.directory / ("grade-" + str(time.time_ns())),
-                                backend=modal_backend(self.provider_directory))
+                                backend=self.backend)
         try:
             # Submitted build hooks also run offline, before trusted checks.
-            grader.open(snapshot=self.snapshot, network_blocked=True)
+            grader.open(prepared=self.prepared_image, network_blocked=True)
             grader.install_source(submission)
             if grader.build().exit_code:
                 return {"status": "failed", "task_success": False, "gc": 0,

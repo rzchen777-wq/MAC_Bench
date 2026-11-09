@@ -54,53 +54,6 @@ def test_check_resets_and_closes_without_solver(tmp_path):
     assert result["reset"]["matches"]
 
 
-def test_dependency_cache_reuses_setup_across_task_builds(tmp_path, monkeypatch):
-    from mac_bench.environments.engineering.product import runtime
-
-    monkeypatch.setenv("MAC_BENCH_ENVIRONMENT_CACHE", str(tmp_path / "cache"))
-    calls = []
-
-    class FakeRuntime:
-        def __init__(self, env, directory):
-            self.directory = Path(directory)
-            self.directory.mkdir(parents=True, exist_ok=True)
-            self.provider = self.directory / "provider"
-            self.provider.mkdir(exist_ok=True)
-            self.backend = self
-            self.sandbox = "sandbox"
-
-        def snapshot_exists(self, *, name):
-            return (
-                self.provider / (sha256(name.encode()).hexdigest() + ".json")
-            ).is_file()
-
-        def open(self):
-            calls.append("open")
-
-        def command(self, name, command, **kwargs):
-            calls.append(command)
-            return SimpleNamespace(exit_code=0)
-
-        def create_snapshot(self, sandbox, *, name, timeout):
-            (self.provider / (sha256(name.encode()).hexdigest() + ".json")).write_text(
-                "{}"
-            )
-
-        def close(self):
-            calls.append("close")
-
-    monkeypatch.setattr(runtime, "ProductRuntime", FakeRuntime)
-    first = {
-        "image": "python:3.12-slim",
-        "setup": "install dependencies",
-        "build": "task A",
-    }
-    second = {**first, "build": "task B"}
-    assert runtime.prepare_environment(
-        first, tmp_path / "run1"
-    ) == runtime.prepare_environment(second, tmp_path / "run2")
-    assert calls == ["open", "install dependencies", "close"]
-    assert len(list((tmp_path / "run2/environment/provider").glob("*.json"))) == 1
 
 
 def test_docker_context_has_only_public_workspace(tmp_path):
@@ -131,8 +84,8 @@ def test_docker_context_has_only_public_workspace(tmp_path):
 
 
 def test_dependency_cache_includes_lockfile_content(tmp_path, monkeypatch):
-    from mac_bench.environments.engineering.product.runtime import (
-        dependency_cache,
+    from mac_bench.environments.engineering.preparation import (
+        dependency_recipe,
         read_environment,
     )
 
@@ -149,9 +102,9 @@ def test_dependency_cache_includes_lockfile_content(tmp_path, monkeypatch):
         "dependency_setup": "npm ci --ignore-scripts",
     }
     (tmp_path / "private/environment.json").write_text(json.dumps(environment))
-    first = dependency_cache(read_environment(tmp_path))
+    first = dependency_recipe(read_environment(tmp_path))
     (tmp_path / "private/dependencies/package-lock.json").write_text('{"version":2}')
-    assert first != dependency_cache(read_environment(tmp_path))
+    assert first != dependency_recipe(read_environment(tmp_path))
 
 
 def test_business_runtime_and_tool_assets_import_together(tmp_path):
@@ -196,84 +149,17 @@ def test_business_cache_changes_when_task_image_changes(tmp_path, monkeypatch):
         (images/'index.json').write_text(json.dumps({'schemaVersion':2,'manifests':[{
             'digest':'sha256:'+value*64,'mediaType':'application/vnd.oci.image.layer.v1.tar',
             'annotations':{'org.opencontainers.image.ref.name':'app'}}]}))
-        return runtime.PortableBusinessWorld(bundle,backend=object()).snapshot_name
+        return runtime.PortableBusinessWorld(bundle,backend=object()).image_recipe
     assert select('a')==select('a')
     assert select('a')!=select('b')
 
 
-@pytest.fixture
-def dependency_preparer(tmp_path, monkeypatch):
-    from mac_bench.environments.engineering.product import runtime
-    monkeypatch.setenv('MAC_BENCH_ENVIRONMENT_CACHE', str(tmp_path / 'cache'))
-    calls = []
-    state = {'fail': None, 'captures': 0}
-
-    class Runtime:
-        def __init__(self, environment, directory):
-            self.directory = Path(directory)
-            self.backend = self
-            self.sandbox = object()
-        def open(self):
-            calls.append('open-base-image')
-        def command(self, name, command, **kwargs):
-            calls.append(name)
-            return SimpleNamespace(exit_code=int(state['fail'] == name), stdout='fixture output')
-        def write_files(self, sandbox, *, files):
-            calls.append(('locks', files))
-        def create_snapshot(self, sandbox, *, name, timeout):
-            state['captures'] += 1
-            calls.append('snapshot')
-            receipt = self.directory / 'provider' / (sha256(name.encode()).hexdigest() + '.json')
-            receipt.parent.mkdir(parents=True)
-            receipt.write_text(json.dumps({'image_id': str(state['captures'])}))
-        def close(self):
-            calls.append('close')
-
-    monkeypatch.setattr(runtime, 'ProductRuntime', Runtime)
-    env = {'image': 'python:3.12', 'setup': 'base install',
-           'dependency_contents': {'requirements.txt': 'example==1'},
-           'dependency_setup': 'locked install'}
-    return runtime, env, calls, state
 
 
-def test_locked_dependencies_use_one_fresh_sandbox_and_one_snapshot(tmp_path, dependency_preparer):
-    runtime, env, calls, state = dependency_preparer
-    first = runtime.prepare_environment(env, tmp_path / 'run1')
-    assert calls == ['open-base-image', 'setup',
-                     ('locks', {'/opt/mac-bench-dependencies/requirements.txt': b'example==1'}),
-                     'dependencies', 'snapshot', 'close']
-    calls.clear()
-    assert runtime.prepare_environment(env, tmp_path / 'run2') == first
-    assert not calls
-    assert len(list((tmp_path / 'cache').iterdir())) == 1
-    assert len(list((tmp_path / 'run2/environment/provider').iterdir())) == 1
 
 
-def test_rebuild_replaces_cache_and_pins_existing_episode(tmp_path, dependency_preparer):
-    runtime, env, calls, state = dependency_preparer
-    runtime.prepare_environment(env, tmp_path / 'run1')
-    runtime.prepare_environment(env, tmp_path / 'run2', rebuild=True)
-    runtime.prepare_environment(env, tmp_path / 'run3')
-    def image(run):
-        return json.loads(next((tmp_path / run / 'environment/provider').glob('*.json')).read_text())['image_id']
-    assert state['captures'] == 2
-    assert image('run1') == '1'
-    assert image('run2') == image('run3') == '2'
-    assert not list((tmp_path / 'cache').glob('*/prepare-*'))
 
 
-def test_failed_rebuild_preserves_cache_and_closes_sandbox(tmp_path, dependency_preparer):
-    runtime, env, calls, state = dependency_preparer
-    runtime.prepare_environment(env, tmp_path / 'run1')
-    state['fail'] = 'dependencies'
-    with pytest.raises(RuntimeError, match='Locked dependency setup failed'):
-        runtime.prepare_environment(env, tmp_path / 'failed', rebuild=True)
-    assert calls[-1] == 'close'
-    assert state['captures'] == 1
-    calls.clear()
-    runtime.prepare_environment(env, tmp_path / 'run2')
-    assert not calls
-    assert not list((tmp_path / 'cache').glob('*/prepare-*'))
 
 
 def test_software_public_materials_use_one_batch_on_open_and_reset(tmp_path, monkeypatch):
@@ -292,13 +178,13 @@ def test_software_public_materials_use_one_batch_on_open_and_reset(tmp_path, mon
     batches = []
     backend = SimpleNamespace(write_files=lambda sandbox, files: batches.append(files))
     class Runtime:
-        def __init__(self, *args, **kwargs): self.sandbox = None
+        def __init__(self, *args, **kwargs): self.sandbox = None; self.backend = kwargs["backend"]
         def open(self, **kwargs): self.sandbox = object()
         def install_source(self, path): pass
         def command(self, *args, **kwargs): return SimpleNamespace(exit_code=0)
         def close(self): self.sandbox = None
     monkeypatch.setattr(runtime.LoadedProductWorld, 'runtime_type', Runtime)
-    monkeypatch.setattr(runtime, 'modal_backend', lambda *args: backend)
+    monkeypatch.setattr(runtime, 'create_backend', lambda *args: backend)
     monkeypatch.setattr(runtime, 'prepare_environment', lambda *args, **kwargs: 'image')
     world = runtime.LoadedProductWorld(root, tmp_path / 'run')
     world.open(); world.reset(); world.close()

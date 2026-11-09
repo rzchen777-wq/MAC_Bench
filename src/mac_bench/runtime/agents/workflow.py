@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
@@ -14,25 +13,16 @@ from mac_bench.runtime.llm.client import (
     assistant_chat_message,
     trace_safe_content,
 )
-from mac_bench.runtime.types import SolverWorkspace
 from mac_bench.runtime.tools import (
-    WORKSPACE_TOOL_NAMES,
-    ExecutionEnvironment,
-    ProcessManager,
     ToolContext,
-    ToolErrorCode,
-    ToolExecutionError,
     ToolRegistry,
-    ToolResult,
     ToolSpec,
-    phase5_tool_registry,
 )
 from mac_bench.runtime.tools.protocol import (
     function_tool_schema,
     normalize_tool_calls,
     parse_function_call,
 )
-from mac_bench.runtime.tools.workspace import WorkspaceTools, backend_for_workspace
 from .context import ContextPolicy, WorkingContext, ContextCapacityError, ContextBudgetStop
 
 
@@ -71,18 +61,6 @@ class TeamOutcome:
     model_calls: int
     tool_calls: int
     artifacts: tuple[Mapping[str, Any], ...] = ()
-
-
-def _is_forbidden_offline_command(command: str) -> bool:
-    return bool(
-        re.search(
-            r"(?:^|[;&|]\s*|\s)(?:python\s+-m\s+pip|pip\d*)\s+install\b|"
-            r"(?:^|[;&|]\s*|\s)git\s+clone\b|"
-            r"(?:^|[;&|]\s*|\s)(?:curl|wget)\b",
-            command,
-            flags=re.IGNORECASE,
-        )
-    )
 
 
 def _normalize_react_action(action: str) -> str:
@@ -131,93 +109,6 @@ def _head_tail_truncate(text: str, *, limit: int) -> tuple[str, bool]:
         f"{text[-tail:]}"
     )
     return truncated, True
-
-
-def _react_tool_specs() -> tuple[str, ...]:
-    workspace = (
-        "Workspace tools: exec/process for commands, read/search for text, apply_patch for "
-        "structured edits, read_csv for tables, and read_image when vision is available."
-    )
-    finish = (
-        "finish: stop after completing the submission contract "
-        "stated in the task. Action Input may be a short summary or JSON: "
-        '{"summary":"...","artifacts":[{"artifact_id":"...","artifact_type":"...",'
-        '"content":"...","declared_outputs":{...},"evidence_refs":["E1"]}]}. '
-        "Workspace files and repository changes are collected by the harness."
-    )
-    return (workspace, finish)
-
-
-def _react_system_prompt(*, network: str = "offline") -> str:
-    tools = "\n".join(f"- {spec}" for spec in _react_tool_specs())
-    if network == "open":
-        environment = (
-            "You are a ReAct agent solving one benchmark task inside a networked "
-            "sandbox. Commands run inside the application workspace.\n"
-        )
-        layout = (
-            "- You are already at the workspace root (`/app`). Product requirements "
-            "are in the task text and also at `/problem/task.md` and "
-            "`/problem/knowledge_base.json` (readable via exec). Write the product "
-            "in `/app`; do not search `/work` or evaluator paths.\n"
-        )
-        net_rule = (
-            "- Outbound network is available: apt, cargo, npm, pip, curl, and wget "
-            "are allowed. Long builds should set exec timeout_ms (up to 600000). "
-            "Do not git clone or import a pre-existing product repository; implement "
-            "from the PRD. Leave the HTTP server running before Finish.\n"
-        )
-    else:
-        environment = (
-            "You are a ReAct agent solving one benchmark task inside an offline sandbox.\n"
-        )
-        layout = (
-            "- You are already at the workspace root; never `cd` to /home, never `find /`, "
-            "and never search outside `.`.\n"
-        )
-        net_rule = (
-            "- The sandbox has no network; do not pip install, git clone, curl, or wget.\n"
-        )
-    return (
-        environment
-        + "The public task states the required work and may include an explicit submission "
-        "contract; follow any such contract exactly. "
-        "Use the files and README in the current workspace to understand its layout.\n"
-        "When function tools are available, use them whenever they help. You may call "
-        "multiple tools in one turn; they run sequentially in the returned order. "
-        "If function tools are unavailable, emit exactly one step per turn in this format:\n"
-        "Thought: <brief plan for this step>\n"
-        "Action: <tool name>\n"
-        "Action Input: <tool arguments>\n\n"
-        f"Available tools:\n{tools}\n\n"
-        "Rules:\n"
-        "- Use only the provided workspace tools and Finish/Submit.\n"
-        f"{layout}"
-        "- Prefer targeted commands and relative paths; avoid dumping large files.\n"
-        "- For repository edits, run focused visible tests before finishing when practical.\n"
-        "- For artifact tasks, write the exact JSON artifact requested by the public task.\n"
-        f"{net_rule}"
-        "- Call Finish only after the requested output is in place."
-    )
-
-
-def _react_user_prompt(
-    *,
-    task: PublicTask,
-    workspace: SolverWorkspace,
-    memory: Sequence[str],
-    network: str = "offline",
-) -> str:
-    env_label = (
-        "networked workspace" if network == "open" else "offline workspace"
-    )
-    return (
-        f"Task: {task.problem_statement}\n"
-        f"Workspace / repository: {task.repo}\n"
-        f"Environment: {env_label} at {workspace.cwd} (already the workspace root).\n"
-        f"Prior memory (may be empty): {json.dumps(list(memory), ensure_ascii=False)}\n"
-        "Begin the ReAct loop."
-    )
 
 
 def _react_tool_schemas(
@@ -342,44 +233,16 @@ def _complete_react(
     )
 
 
-def _office_system_prompt() -> str:
-    return (
-        "You are closing one office matter through its live API. "
-        "Every function is an operation on a live record: search_records lists a resource, "
-        "show reads one record, update changes fields on an existing record, and create adds a record. "
-        "Read a record before you change it. "
-        "upstream_ids, when you set it, is a list of {resource, id} taken from records you have read. "
-        "Call finish only after the public task is done."
-    )
-
-
-def _office_user_prompt(*, task: PublicTask) -> str:
-    return (
-        f"Task: {task.problem_statement}\n"
-        "The records are already live. Use the API functions to read them and to make the required changes."
-    )
-
-
 def _react_step_from_tool_call(
     tool_call: Mapping[str, Any],
     *,
     extra_names: frozenset[str] = frozenset(),
-    workspace: bool = True,
 ) -> dict[str, Any]:
     call = parse_function_call(tool_call)
     name = _normalize_react_action(call.name)
     args = call.arguments
     thought = call.thought
-    workspace_names = {
-        "exec",
-        "process",
-        "read",
-        "search",
-        "apply_patch",
-        "read_image",
-        "read_csv",
-    }
-    if (workspace and name in workspace_names) or name in extra_names:
+    if name in extra_names:
         clean_args = {key: value for key, value in args.items() if key != "thought"}
         return {
             "thought": thought,
@@ -557,20 +420,17 @@ def _compact_react_history(
 
 
 class ReactAgent:
-    """Single-agent ReAct loop over the shared workspace tool registry."""
+    """Single-agent ReAct loop over the tools supplied by the task."""
 
     def __init__(
         self,
         client: ChatClient,
-        tools: WorkspaceTools,
+        tools: Sequence[ToolSpec],
         *,
         budget: AgentBudget | None = None,
         output_limit: int = 4000,
         model_max_tokens: int = 16_384,
         model_temperature: float = 0.0,
-        network: str = "offline",
-        extra_tools: Sequence[ToolSpec] | None = None,
-        workspace_tools: bool = True,
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         history_tool_char_budget: int | None = None,
@@ -579,7 +439,7 @@ class ReactAgent:
         completion_recovery_max_tokens: int = 32_768,
     ) -> None:
         self.client = client
-        self.tools = tools
+        self.tools = tuple(tools)
         self.budget = budget or AgentBudget(
             max_model_calls=30,
             max_env_actions=30,
@@ -593,10 +453,6 @@ class ReactAgent:
         self.completion_recovery_attempts = int(completion_recovery_attempts)
         self.completion_recovery_max_tokens = max(self.model_max_tokens, int(completion_recovery_max_tokens))
         self.model_temperature = float(model_temperature)
-        self.network = network
-        self.process_manager = ProcessManager()
-        self.extra_tools = tuple(extra_tools or ())
-        self.workspace_tools = workspace_tools
         self.system_prompt = system_prompt
         self.user_prompt = user_prompt
         if history_tool_char_budget is not None and history_tool_char_budget < 0:
@@ -608,40 +464,21 @@ class ReactAgent:
         self,
         *,
         task: PublicTask,
-        workspace: SolverWorkspace,
         agent_id: str = "agent-1",
-        memory: Sequence[str] = (),
         event_callback: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> AgentOutcome:
-        if self.workspace_tools:
-            system = _react_system_prompt(network=self.network)
-            prompt = _react_user_prompt(
-                task=task, workspace=workspace, memory=memory, network=self.network
-            )
-        else:
-            system = _office_system_prompt()
-            prompt = _office_user_prompt(task=task)
-        system = self.system_prompt if self.system_prompt is not None else system
-        prompt = self.user_prompt if self.user_prompt is not None else prompt
+        system = self.system_prompt if self.system_prompt is not None else (
+            "Use the provided task tools to complete the task, then call finish with a concise report.")
+        prompt = self.user_prompt if self.user_prompt is not None else task.problem_statement
         messages = [ChatMessage("system", system), ChatMessage("user", prompt)]
-        environment = (ExecutionEnvironment(backend_for_workspace(self.tools, workspace), workspace)
-                       if self.workspace_tools else None)
-        registry = phase5_tool_registry(self.process_manager) if self.workspace_tools else ToolRegistry()
-        for spec in self.extra_tools:
+        registry = ToolRegistry()
+        for spec in self.tools:
             registry.register(spec)
-        extra_names = frozenset(spec.name for spec in self.extra_tools)
+        extra_names = frozenset(spec.name for spec in self.tools)
         capabilities = frozenset(getattr(self.client, "capabilities", frozenset()))
-        workspace_names = (
-            {"exec", "process", "read", "search", "apply_patch", "read_image", "read_csv"}
-            if self.workspace_tools
-            else set()
-        )
         tool_context = ToolContext(
-            environment=environment,
-            agent_id=agent_id,
-            sample_id=task.public_id,
-            permissions=frozenset(workspace_names | set(extra_names)),
-            capabilities=capabilities,
+            agent_id=agent_id, sample_id=task.public_id,
+            permissions=extra_names, capabilities=capabilities,
         )
         tool_schemas = _react_tool_schemas(registry, tool_context)
         trace: list[dict[str, Any]] = []
@@ -887,7 +724,6 @@ class ReactAgent:
                     parsed = _react_step_from_tool_call(
                         turn_tool_calls[0],
                         extra_names=extra_names,
-                        workspace=self.workspace_tools,
                     )
                 except ValueError as exc:
                     invalid_actions += 1
@@ -1007,7 +843,7 @@ class ReactAgent:
                     continue
                 break
 
-            if (self.workspace_tools and action_name in WORKSPACE_TOOL_NAMES) or action_name in extra_names:
+            if action_name in extra_names:
                 if native_step:
                     arguments = dict(parsed.get("arguments") or {})
                 elif action_name == "exec":
@@ -1063,31 +899,7 @@ class ReactAgent:
                             "arguments": arguments,
                         }
                     )
-                if (
-                    self.network != "open"
-                    and action_name == "exec"
-                    and _is_forbidden_offline_command(
-                        str(arguments.get("command") or "")
-                    )
-                ):
-                    trace.append(
-                        {
-                            "step": step,
-                            "kind": "policy_blocked",
-                            "tool": "exec",
-                            "arguments": arguments,
-                            "policy": "offline_workspace",
-                            "agent_id": agent_id,
-                        }
-                    )
-                    tool_result = ToolResult.failed(
-                        ToolExecutionError(
-                            ToolErrorCode.PERMISSION_DENIED,
-                            "command rejected by the offline sealed-workspace policy",
-                        )
-                    )
-                else:
-                    tool_result = registry.execute(action_name, arguments, tool_context)
+                tool_result = registry.execute(action_name, arguments, tool_context)
                 tool_calls += 1
                 result_trace = tool_result.trace_dict()
                 model_content = tool_result.openai_content()
@@ -1182,15 +994,12 @@ class ReactSingleWorkflow:
     def __init__(
         self,
         client: ChatClient,
-        tools: WorkspaceTools,
+        tools: Sequence[ToolSpec],
         *,
         budget: AgentBudget | None = None,
         output_limit: int = 2500,
         model_max_tokens: int = 16_384,
         model_temperature: float = 0.0,
-        network: str = "offline",
-        extra_tools: Sequence[ToolSpec] | None = None,
-        workspace_tools: bool = True,
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         history_tool_char_budget: int | None = None,
@@ -1199,9 +1008,7 @@ class ReactSingleWorkflow:
         completion_recovery_max_tokens: int = 32_768,
     ) -> None:
         self.client = client
-        self.tools = tools
-        self.extra_tools = tuple(extra_tools or ())
-        self.workspace_tools = workspace_tools
+        self.tools = tuple(tools)
         react_budget = budget or AgentBudget(
             max_model_calls=30,
             max_env_actions=80,
@@ -1215,9 +1022,6 @@ class ReactSingleWorkflow:
             output_limit=output_limit,
             model_max_tokens=model_max_tokens,
             model_temperature=model_temperature,
-            network=network,
-            extra_tools=self.extra_tools,
-            workspace_tools=self.workspace_tools,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             history_tool_char_budget=history_tool_char_budget,
@@ -1230,20 +1034,16 @@ class ReactSingleWorkflow:
         self,
         *,
         task: PublicTask,
-        workspace: SolverWorkspace,
-        memory: Sequence[str] = (),
         event_callback: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> TeamOutcome:
         """Run a tool-enabled single-agent loop and return patch/artifacts."""
 
         outcome = self.react_agent.run(
             task=task,
-            workspace=workspace,
             agent_id="agent-1",
-            memory=memory,
             event_callback=event_callback,
         )
-        return self._combine((outcome,), self.tools.collect_patch(workspace) if self.workspace_tools else "")
+        return self._combine((outcome,), "")
 
     @staticmethod
     def _combine(outcomes: Sequence[AgentOutcome], patch: str) -> TeamOutcome:

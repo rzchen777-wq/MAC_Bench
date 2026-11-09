@@ -148,7 +148,7 @@ Browse all instructions with `mac-bench tasks list` and `mac-bench tasks show TA
 
 ## 🚀 Quickstart
 
-Use **Python 3.11+ on Linux**, a Modal account, and a model endpoint supporting chat completions and tool calls.
+Use **Python 3.11+ on Linux**, a Modal or Daytona account, and a model endpoint supporting chat completions and tool calls.
 
 ### 1. 📦 Install and load the data
 
@@ -169,7 +169,7 @@ cp .env.example .env
 modal token new
 ```
 
-Set `MAC_BENCH_LLM_BASE_URL`, `MAC_BENCH_LLM_API_KEY`, and `MAC_BENCH_LLM_MODEL` in `.env`. The evaluator runs locally; Modal hosts the task environment.
+Set `MAC_BENCH_LLM_BASE_URL`, `MAC_BENCH_LLM_API_KEY`, and `MAC_BENCH_LLM_MODEL` in `.env`. The evaluator runs locally; the selected provider hosts the task environment. [Daytona setup](docs/environments.md#choose-modal-or-daytona) uses `pip install -e '.[daytona,agents]'`, `DAYTONA_API_KEY`, `MAC_BENCH_BUSINESS_PROVIDER=daytona`, and `MAC_BENCH_SOFTWARE_PROVIDER=daytona`.
 
 ### 3. ▶️ Run one episode
 
@@ -272,7 +272,7 @@ The [integration guide](docs/agents.md) walks through the example and explains t
 | 🤖 Connect my own agent system | [Agent integration](docs/agents.md) |
 | ☁️ Prepare and configure environments | [Environments](docs/environments.md) |
 
-🐳 **Prefer Docker?** Use the [containerized evaluation client](docker/README.md) with Modal environments.
+🐳 **Prefer Docker?** Use the [containerized evaluation client](docker/README.md) with Modal or Daytona environments.
 
 🛠️ **Want to contribute?** See [Contributing](CONTRIBUTING.md) for development, testing and issue reports.
 

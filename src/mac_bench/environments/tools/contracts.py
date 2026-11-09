@@ -87,7 +87,11 @@ class Tool:
 
     def archive(self):
         """Complete owner-side contract; never an agent discovery response."""
-        return deepcopy({**self.summary(), 'input_schema': self.input_schema,
+        return deepcopy(self._archive_view())
+
+    def _archive_view(self):
+        """Borrow immutable fields only for immediate owner-side serialization."""
+        return {**self.summary(), 'input_schema': self.input_schema,
                          'output_description': self.output_description, 'notes': list(self.notes),
                          'native_contract': self.native_contract,
-                         'retry_policy': 'Never automatically retry writes. Reuse request_id to recover this service receipt; read native state after an unknown outcome.'})
+                         'retry_policy': 'Never automatically retry writes. Reuse request_id to recover this service receipt; read native state after an unknown outcome.'}

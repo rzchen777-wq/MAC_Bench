@@ -1,7 +1,6 @@
 """Existing ReAct method over the public task-layer contract, across both world families."""
 from mac_bench.runtime.agents.workflow import ReactSingleWorkflow
 from mac_bench.runtime.types import PublicTask
-from mac_bench.runtime.types import SolverWorkspace
 from mac_bench.runtime.tools import ToolSpec, ToolResult, ToolExecutionError, ToolErrorCode
 from mac_bench.runtime.agents.context import ContextPolicy
 
@@ -36,8 +35,7 @@ class ReactSingle:
             tools.append(ToolSpec(definition.name, definition.description, schema.get('properties', {}),
                 tuple(schema.get('required', ())), invoke,
                 additional_properties=schema.get('additionalProperties', False)))
-        workflow = ReactSingleWorkflow(context.client, None, budget=context.budget.limits,
-            workspace_tools=False, extra_tools=tools,
+        workflow = ReactSingleWorkflow(context.client, tools, budget=context.budget.limits,
             system_prompt=context.task.interaction_instructions + '\nUse finish to submit your final report.',
             user_prompt=context.task.instruction, output_limit=60000,
             model_max_tokens=self.spec['model_parameters']['max_tokens'],
@@ -49,6 +47,6 @@ class ReactSingle:
         context.event({'kind': 'agent_start', 'agent_id': 'agent-1'})
         try:
             return workflow.run_single(task=PublicTask(context.task.task_id, 'collaboration-task', context.task.instruction),
-                workspace=SolverWorkspace(None, cwd='.', kind='artifact'), event_callback=context.event)
+                event_callback=context.event)
         finally:
             context.event({'kind': 'agent_end', 'agent_id': 'agent-1'})

@@ -4,7 +4,7 @@
 
 ## Run the evaluation client
 
-The Docker image packages the MAC-Bench evaluator and ReAct dependencies. It connects to the same Modal environments as a local Python installation.
+The Docker image packages the MAC-Bench evaluator and ReAct dependencies. It connects to the same Modal or Daytona environments as a local Python installation.
 
 From the repository root, build the client and browse the development tasks:
 
@@ -13,7 +13,7 @@ docker build -f docker/Dockerfile -t mac-bench .
 docker run --rm mac-bench tasks list --split dev
 ```
 
-Load the [dataset](../docs/getting-started.md#2-load-the-task-data), then configure your model and Modal credentials in `.env`:
+Load the [dataset](../docs/getting-started.md#2-load-the-task-data), then configure your model and sandbox credentials in `.env`:
 
 ```dotenv
 MAC_BENCH_LLM_BASE_URL=https://your-provider.example/v1
@@ -22,6 +22,8 @@ MAC_BENCH_LLM_MODEL=your-model-name
 MODAL_TOKEN_ID=your-modal-token-id
 MODAL_TOKEN_SECRET=your-modal-token-secret
 ```
+
+For Daytona, replace the two Modal variables with `DAYTONA_API_KEY` and set both `MAC_BENCH_BUSINESS_PROVIDER=daytona` and `MAC_BENCH_SOFTWARE_PROVIDER=daytona`. The same client image supports either provider.
 
 Replace the placeholder values with your endpoint and credentials. Run one episode:
 
@@ -54,7 +56,7 @@ docker run --rm --env-file .env \
   --out outputs/preschool-superagent
 ```
 
-Use the model and Modal credentials described above. For GPT-6-Luna through OpenRouter, set `OPENROUTER_API_KEY` in `.env` and add `--method-config configs/baselines/superagent_luna.yaml`.
+Use the model and sandbox credentials described above. For GPT-6-Luna through OpenRouter, set `OPENROUTER_API_KEY` in `.env` and add `--method-config configs/baselines/superagent_luna.yaml`.
 
 ## Export software build contexts
 
@@ -72,4 +74,4 @@ The output includes:
 | `base/` | Base image and fixed dependency setup |
 | `task/` | Starter source, public materials and task initialization |
 
-Each export includes a README with build commands. These contexts let you inspect or build the software workspace with Docker; the evaluation command above uses Modal for execution and scoring.
+Each export includes a README with build commands. These contexts let you inspect or build the software workspace with Docker; the evaluation command above uses the selected cloud provider for execution and scoring.

@@ -1,8 +1,6 @@
 """Selectable model connections, credential isolation and embedding compatibility."""
 import json
-from pathlib import Path
 from types import SimpleNamespace
-import numpy as np
 import pytest
 import yaml
 from mac_bench.baselines.common.config import SPECS, model_client, resolve

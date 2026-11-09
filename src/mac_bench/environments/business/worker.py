@@ -9,32 +9,63 @@ from .containers import Engine, create_body
 from .services import BusinessServices, service_order
 
 
+def import_image(images, name, tag):
+    """Stream OCI conversion into the host Docker client without a staged archive."""
+    command = ['skopeo', 'copy', '--quiet', 'oci:' + str(images) + ':' + name,
+               'docker-archive:/dev/stdout:' + tag]
+    producer = subprocess.Popen(command, stdout=subprocess.PIPE)
+    try:
+        with producer.stdout:
+            loaded = subprocess.run(['docker', 'load'], stdin=producer.stdout,
+                                    stdout=subprocess.DEVNULL)
+        converted = producer.wait()
+    except BaseException:
+        producer.kill()
+        producer.wait()
+        raise
+    if loaded.returncode:
+        raise subprocess.CalledProcessError(loaded.returncode, ['docker', 'load'])
+    if converted:
+        raise subprocess.CalledProcessError(converted, command)
+
+
 def load_images(root, config):
+    missing = []
     for service in config["services"]:
-        name = service["name"]
-        tag = "mac-bench/" + name + ":initial"
-        if subprocess.run(
-            ["docker", "image", "inspect", tag],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode:
-            archive = root / "image.tar"
-            subprocess.run(
-                [
-                    "skopeo",
-                    "copy",
-                    "--quiet",
-                    "oci:" + str(root / "images") + ":" + service["image"],
-                    "docker-archive:" + str(archive) + ":" + tag,
-                ],
-                check=True,
-            )
-            subprocess.run(
-                ["docker", "load", "-i", str(archive)],
-                check=True,
-                stdout=subprocess.DEVNULL,
-            )
-            archive.unlink()
+        tag = "mac-bench/" + service["name"] + ":initial"
+        if subprocess.run(["docker", "image", "inspect", tag],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+            missing.append((service["image"], tag))
+    if not missing:
+        return
+    images = root / 'images'
+    index = json.loads((images / 'index.json').read_text())
+    descriptors = {d['annotations']['org.opencontainers.image.ref.name']: d for d in index['manifests']}
+    def dependencies(descriptor):
+        value = descriptor['digest'].removeprefix('sha256:')
+        if descriptor['digest'] != 'sha256:' + value or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+            raise ValueError('Invalid OCI digest')
+        result = {value}
+        if 'manifest' in descriptor['mediaType'] or 'index' in descriptor['mediaType']:
+            document = json.loads((images / 'blobs/sha256' / value).read_text())
+            for child in [*document.get('manifests', []), *document.get('layers', []),
+                          *([document['config']] if 'config' in document else [])]:
+                result.update(dependencies(child))
+        return result
+    needed = {name: dependencies(descriptors[name]) for name, _ in missing}
+    # Import large archives while the expanded store is still small.
+    missing.sort(key=lambda item: sum((images / 'blobs/sha256' / value).stat().st_size
+                                      for value in needed[item[0]]), reverse=True)
+    # Free each image's transfer files before importing the next; shared layers
+    # remain until the last consumer. No uncompressed docker-archive is staged.
+    for position, (name, tag) in enumerate(missing):
+        import_image(images, name, tag)
+        if not any(other == name for other, _ in missing[position + 1:]):
+            del needed[name]
+        remaining = set().union(*needed.values()) if needed else set()
+        for path in (images / 'blobs/sha256').iterdir():
+            if path.name not in remaining:
+                path.unlink()
 
 
 def restore(root, *, start=True):
@@ -109,6 +140,13 @@ def restore(root, *, start=True):
         service = byname[name]
         tag = "mac-bench/" + name + ":initial"
         body = create_body(service["configuration"], tag)
+        if name == "runtime-hrms":
+            # bench's exit hook checks PyPI without a timeout. Startup invokes
+            # several bench commands; the native opt-out keeps snapshot loading
+            # independent of external update servers, including offline VMs.
+            body["Env"] = [value for value in body.get("Env") or []
+                           if not value.startswith("FRAPPE_DOCKER_BUILD=")]
+            body["Env"].append("FRAPPE_DOCKER_BUILD=1")
         for network_name, network in config["networks"].items():
             if body["HostConfig"].get("NetworkMode") == network["Id"]:
                 body["HostConfig"]["NetworkMode"] = network_name

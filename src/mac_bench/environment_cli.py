@@ -1,6 +1,8 @@
-"""Inspect task environments, check Modal loading, and export Docker build materials."""
+"""Inspect task environments, check environment loading, and export Docker build materials."""
 
 import argparse
+from dataclasses import asdict
+from mac_bench.runtime.sandbox.providers import provider_name, create_backend, resolve_config
 from mac_bench.environments.engineering.public_workspace import initialization_commands
 
 import json
@@ -12,9 +14,9 @@ from mac_bench.data_cli import catalog_rows
 from mac_bench.runtime.paths import repository_root, artifact_root
 from mac_bench.evaluation.tasks.catalog import open_task, task_record
 from mac_bench.evaluation.tasks.protocol import ENGINEERING
-from mac_bench.environments.engineering.product.runtime import (
+from mac_bench.environments.engineering.preparation import (
     read_environment,
-    dependency_cache,
+    dependency_recipe,
 )
 
 
@@ -28,8 +30,9 @@ def describe(bundle, category):
 
         return {
             "family": "software",
+            "provider": provider_name("software"),
             "base_image": environment["image"],
-            "base_key": dependency_cache(environment)[0].name,
+            "base_key": dependency_recipe(environment),
             "task_resources": [
                 "workspace archive",
                 "public materials",
@@ -45,6 +48,7 @@ def describe(bundle, category):
         }
     return {
         "family": "business",
+        "provider": provider_name("business"),
         "applications": metadata.get("apps", []),
         "task_resources": [
             "initial application state",
@@ -53,13 +57,13 @@ def describe(bundle, category):
             "outcome verifier",
         ],
         "loading": [
-            "load application images into an isolated VM",
+            "load application images into an isolated sandbox",
             "restore initial application data",
             "start services",
             "install packaged tools and verifier",
             "check initial state",
         ],
-        "cleanup": "terminate task VM and its application containers; retain image cache and run results",
+        "cleanup": "terminate task sandbox and its application containers; retain image cache and run results",
     }
 
 
@@ -67,7 +71,7 @@ def export_docker_context(record, output):
     """Export the software dependency recipe and public task workspace."""
     if record.category not in ENGINEERING:
         raise ValueError(
-            "docker-context accepts software tasks; business tasks load their Modal VM snapshots"
+            "docker-context accepts software tasks; business tasks load their prepared application snapshots"
         )
     from mac_bench.environments.packaging.bundle import WorldBundle
 
@@ -143,7 +147,7 @@ docker run --rm -it --network none mac-bench-software-task
 The base image runs the packaged dependency setup. The task image loads the
 starter, public materials and task initialization. Read `/work/TASK.md` and
 `/work/public/` inside the container. These build materials are separate from
-the Modal evaluation harness and do not include private tests or reference code.
+the evaluation harness and do not include private tests or reference code.
 """)
     return output
 
@@ -194,14 +198,14 @@ def main(argv=None):
             parser.error(
                 "Business environments are restored per task; use environment check"
             )
-        from mac_bench.environments.engineering.product.runtime import (
+        from mac_bench.environments.engineering.preparation import (
             prepare_environment,
         )
 
         environment = read_environment(record.bundle)
         result = {
             "task_id": record.task_id,
-            "snapshot": prepare_environment(environment, output, rebuild=args.rebuild),
+            "image": asdict(prepare_environment(environment, output, backend=create_backend(resolve_config("software")), rebuild=args.rebuild)),
         }
     else:
         result = check_task(record, output)

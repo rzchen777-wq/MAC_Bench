@@ -13,7 +13,6 @@ from mac_bench.runtime.llm.client import ChatResponse
 
 @pytest.mark.baselines
 def test_aorchestra_native_delegate_can_report_interrupted_worker(monkeypatch, tmp_path):
-    from pathlib import Path
     from mac_bench.baselines.common.source import source_modules
     from mac_bench.baselines.common.gateway import MethodStop
     from mac_bench.baselines.aorchestra.tasks import _propagate_worker_stop
@@ -42,7 +41,6 @@ def test_aorchestra_native_delegate_can_report_interrupted_worker(monkeypatch, t
 
 @pytest.mark.baselines
 def test_aorchestra_long_delegation_does_not_become_false_finished(tmp_path):
-    from pathlib import Path
     from mac_bench.baselines.common.source import source_modules
     from mac_bench.baselines.aorchestra.tasks import _coordinator_runner
     root = repository_root() / '.cache/baselines/AOrchestra'
